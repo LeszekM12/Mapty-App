@@ -411,3 +411,58 @@ a:visited {
     border-color: var(--color-brand--2);
     background-color: rgba(0, 196, 106, 0.12);
 }
+
+/* ─── ROUTE LOADING ─── */
+.route-loading {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.2rem 0;
+    margin-bottom: 0.8rem;
+}
+
+.route-loading__spinner {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.route-loading__dot {
+    width: 0.8rem;
+    height: 0.8rem;
+    border-radius: 50%;
+    background-color: var(--color-brand--2);
+    animation: routeDotBounce 1.2s ease-in-out infinite;
+}
+
+.route-loading__dot:nth-child(2) {
+    animation-delay: 0.2s;
+    background-color: color-mix(in srgb, var(--color-brand--2) 70%, var(--color-brand--1));
+}
+
+.route-loading__dot:nth-child(3) {
+    animation-delay: 0.4s;
+    background-color: var(--color-brand--1);
+}
+
+@keyframes routeDotBounce {
+    0%, 60%, 100% {
+        transform: translateY(0);
+        opacity: 0.5;
+    }
+    30% {
+        transform: translateY(-0.8rem);
+        opacity: 1;
+    }
+}
+
+.route-loading__text {
+    font-size: 1.3rem;
+    color: var(--color-light--1);
+    animation: routeTextPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes routeTextPulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}

@@ -73,6 +73,7 @@ const stepBText = document.getElementById('stepBText');
 const routeResult = document.getElementById('routeResult');
 const routeDist = document.getElementById('routeDist');
 const routeTime = document.getElementById('routeTime');
+const routeLoading = document.getElementById('routeLoading');
 
 class App {
   #map;
@@ -388,6 +389,10 @@ class App {
   }
 
   _drawRoute() {
+    // Pokaż loading, ukryj poprzedni wynik
+    routeLoading.classList.remove('hidden');
+    routeResult.classList.add('hidden');
+
     // Remove old routing control if exists
     if (this.#routingControl) {
       this.#map.removeControl(this.#routingControl);
@@ -410,6 +415,7 @@ class App {
       createMarker: () => null, // używamy własnych markerów A/B
     })
       .on('routesfound', e => {
+        routeLoading.classList.add('hidden');
         const route = e.routes[0].summary;
         const distKm = (route.totalDistance / 1000).toFixed(2);
 
@@ -422,6 +428,7 @@ class App {
         routeResult.classList.remove('hidden');
       })
       .on('routingerror', () => {
+        routeLoading.classList.add('hidden');
         routeDist.textContent = 'Błąd';
         routeTime.textContent = '—';
         routeResult.classList.remove('hidden');
@@ -445,6 +452,7 @@ class App {
       this.#routingControl = null;
     }
 
+    routeLoading.classList.add('hidden');
     btnRoute.classList.remove('hidden');
     routeInfo.classList.add('hidden');
     routeResult.classList.add('hidden');
