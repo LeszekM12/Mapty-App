@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="X-UA-Compatible" content="ie=edge" />
-  <link rel="shortcut icon" type="image/png" href="/icon.png" />
+  <link rel="shortcut icon" type="image/png" href="icon.png" />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css" integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ==" crossorigin="" />
@@ -12,43 +12,48 @@
   <script defer src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js" integrity="sha512-gZwIG9x3wUXg2hdXF6+rVkLF/0Vi9U8D2Ntg4Ga5I5BZpVkVxlJWbSQtXPSiUTtC0TjtGOmxa1AJPuV0CPthew==" crossorigin=""></script>
   <script defer src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
   <script defer src="script.js"></script>
-  <title>mapty // Map your workouts</title>
+  <title>Mapty - Workouts App</title>
 </head>
 <body>
 <div class="sidebar">
-  <img src="logo.png" alt="Logo" class="logo" />
+  <img src="logo.png" alt="Mapty logo" class="logo" />
 
+  <!-- ROUTE PLANNER -->
   <div class="route-controls">
-    <button class="btn-route" id="btnRoute">🗺️ Wyznacz trasę A → B</button>
+    <button class="btn-route" id="btnRoute">🗺️ Plan Route A → B</button>
+
     <div class="route-info hidden" id="routeInfo">
 
-      <!-- Tryb aktywności -->
+      <!-- Activity mode selector — determines estimated travel time -->
       <div class="route-mode-selector">
-        <button class="route-mode-btn route-mode-btn--active" data-mode="running" title="Bieg">🏃‍♂️</button>
-        <button class="route-mode-btn" data-mode="cycling" title="Rower">🚴‍♀️</button>
-        <button class="route-mode-btn" data-mode="walking" title="Marsz">🚶</button>
+        <button class="route-mode-btn route-mode-btn--active" data-mode="running" title="Running">🏃‍♂️</button>
+        <button class="route-mode-btn" data-mode="cycling" title="Cycling">🚴‍♀️</button>
+        <button class="route-mode-btn" data-mode="walking" title="Walking">🚶</button>
       </div>
 
+      <!-- Step-by-step instructions -->
       <div class="route-info__steps">
         <div class="route-info__step">
           <span class="route-info__badge route-info__badge--a">A</span>
-          <span id="stepAText">Kliknij punkt startowy na mapie</span>
+          <span id="stepAText">Click the start point on the map</span>
         </div>
         <div class="route-info__step">
           <span class="route-info__badge route-info__badge--b">B</span>
-          <span id="stepBText">Kliknij punkt końcowy na mapie</span>
+          <span id="stepBText">Click the end point on the map</span>
         </div>
       </div>
-      <!-- Loading indicator -->
+
+      <!-- Loading indicator shown while OSRM calculates the route -->
       <div class="route-loading hidden" id="routeLoading">
         <div class="route-loading__spinner">
           <div class="route-loading__dot"></div>
           <div class="route-loading__dot"></div>
           <div class="route-loading__dot"></div>
         </div>
-        <span class="route-loading__text">Wyznaczam trasę...</span>
+        <span class="route-loading__text">Calculating route...</span>
       </div>
 
+      <!-- Route result: distance + estimated time -->
       <div class="route-result hidden" id="routeResult">
         <div class="route-result__item">
           <span class="route-result__icon">📏</span>
@@ -61,10 +66,12 @@
           <span class="route-result__unit">min</span>
         </div>
       </div>
-      <button class="btn-route-cancel" id="btnCancelRoute">✕ Anuluj trasę</button>
+
+      <button class="btn-route-cancel" id="btnCancelRoute">✕ Cancel route</button>
     </div>
   </div>
 
+  <!-- WORKOUT LIST -->
   <ul class="workouts">
     <form class="form hidden">
       <div class="form__row">
@@ -90,10 +97,13 @@
         <label class="form__label">Elev Gain</label>
         <input class="form__input form__input--elevation" placeholder="meters" />
       </div>
+      <!-- Submit button visible on mobile (no keyboard Enter available) -->
       <button class="form__btn">✓ Add Workout</button>
     </form>
   </ul>
 </div>
+
+<!-- Map rendered by Leaflet -->
 <div id="map"></div>
 </body>
 </html>

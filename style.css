@@ -374,7 +374,7 @@ a:visited {
     background-color: var(--color-brand--1);
 }
 
-/* Hide leaflet routing machine default container */
+/* Hide default Leaflet Routing Machine panel — replaced by custom sidebar UI */
 .leaflet-routing-container {
     display: none !important;
 }
@@ -383,7 +383,7 @@ a:visited {
     display: none !important;
 }
 
-/* ─── ROUTE MODE SELECTOR ─── */
+/* ─── ACTIVITY MODE SELECTOR ─── */
 .route-mode-selector {
     display: flex;
     gap: 0.6rem;
@@ -412,7 +412,7 @@ a:visited {
     background-color: rgba(0, 196, 106, 0.12);
 }
 
-/* ─── ROUTE LOADING ─── */
+/* ─── ROUTE LOADING ANIMATION ─── */
 .route-loading {
     display: flex;
     align-items: center;
@@ -469,7 +469,7 @@ a:visited {
 
 /* ════════════════════════════════════════
    MOBILE RESPONSIVE — max 768px
-   Układ: mapa pełnoekranowa + panel od dołu
+   Layout: fullscreen map + bottom sheet panel
    ════════════════════════════════════════ */
 
 @media (max-width: 768px) {
@@ -481,7 +481,7 @@ a:visited {
         overflow: hidden;
     }
 
-    /* Mapa zajmuje całe tło */
+    /* Map fills the entire background */
     #map {
         position: fixed;
         inset: 0;
@@ -490,7 +490,7 @@ a:visited {
         z-index: 1;
     }
 
-    /* Sidebar jako panel wysuwany od dołu */
+    /* Sidebar as a bottom sheet panel */
     .sidebar {
         position: fixed;
         bottom: 0;
@@ -499,7 +499,7 @@ a:visited {
         z-index: 100;
         flex-basis: auto;
         width: 100%;
-        height: 5.5rem; /* domyślnie zwinięty — tylko uchwyt */
+        height: 55vh; /* default: half height — enough room to show workouts without clipping */
         max-height: 88dvh;
         padding: 0 2rem 2rem 2rem;
         border-radius: 2rem 2rem 0 0;
@@ -508,7 +508,7 @@ a:visited {
         transition: height 0.32s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    /* Uchwyt do przeciągania panelu */
+    /* Drag handle strip */
     .sidebar::before {
         content: '';
         display: block;
@@ -521,13 +521,13 @@ a:visited {
         flex-shrink: 0;
     }
 
-    /* Logo mniejsze */
+    /* Smaller logo on mobile */
     .logo {
         height: 3.6rem;
         margin-bottom: 1.6rem;
     }
 
-    /* Lista treningów — przewijalna w panelu */
+    /* Workout list — scrollable inside the panel */
     .workouts {
         height: auto;
         max-height: 40dvh;
@@ -535,7 +535,7 @@ a:visited {
         overflow-x: hidden;
     }
 
-    /* Formularz — mniejszy padding */
+    /* Form — reduced padding on mobile */
     .form {
         padding: 1.2rem 1.6rem;
         gap: 0.4rem 1.5rem;
@@ -552,7 +552,7 @@ a:visited {
         padding: 0.5rem 0.9rem; /* łatwiejsze dotykanie */
     }
 
-    /* Workout karty — 2 kolumny zamiast 4 */
+    /* Workout cards — 2 columns instead of 4 */
     .workout {
         grid-template-columns: 1fr 1fr;
         padding: 1.2rem 1.6rem;
@@ -567,7 +567,7 @@ a:visited {
         font-size: 1.4rem;
     }
 
-    /* Route controls */
+    /* Route planner controls */
     .btn-route {
         padding: 1.3rem 1.5rem; /* większy obszar dotyku */
         font-size: 1.5rem;
@@ -595,23 +595,23 @@ a:visited {
         font-size: 1.4rem;
     }
 
-    /* Copyright — ukryj na mobile żeby nie zajmował miejsca */
+    /* Hide copyright on mobile to save space */
     .copyright {
         display: none;
     }
 
-    /* Leaflet zoom controls — przesuń żeby nie nachodziły na panel */
+    /* Push Leaflet zoom controls above the bottom panel */
     .leaflet-control-zoom {
         margin-bottom: 15rem !important;
     }
 
-    /* Popup leaflet — czytelniejszy na małym ekranie */
+    /* Leaflet popup — more readable on small screens */
     .leaflet-popup .leaflet-popup-content {
         font-size: 1.4rem;
     }
 }
 
-/* Bardzo małe ekrany (np. iPhone SE) */
+/* Extra small screens (e.g. iPhone SE) */
 @media (max-width: 380px) {
     .sidebar {
         padding: 0 1.4rem 1.4rem 1.4rem;
@@ -661,7 +661,7 @@ a:visited {
     color: #ff6b6b;
 }
 
-/* Na mobile zawsze widoczny (brak hovera) */
+/* Always visible on mobile — no hover state on touch devices */
 @media (max-width: 768px) {
     .workout__delete {
         opacity: 1;
@@ -692,7 +692,7 @@ a:visited {
         background-color: #00a85a;
     }
 
-    /* Formularz wyższy żeby pomieścić przycisk */
+    /* Allow form to grow and fit the button */
     .form {
         height: auto;
     }
