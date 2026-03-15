@@ -461,3 +461,54 @@ class App {
 }
 
 const app = new App();
+
+// ─── MOBILE PANEL DRAG ───────────────────────────────────────────
+(function initMobilePanel() {
+  const sidebar = document.querySelector('.sidebar');
+  let startY = 0;
+  let startHeight = 0;
+  let isDragging = false;
+
+  const isMobile = () => window.innerWidth <= 768;
+
+  // Dotyk zaczyna się na uchwycie (::before nie można złapać, więc łapiemy górne 40px sidebara)
+  sidebar.addEventListener('touchstart', e => {
+    if (!isMobile()) return;
+    const touch = e.touches[0];
+    const rect = sidebar.getBoundingClientRect();
+    // Tylko górne 48px sidebara = uchwyt
+    if (touch.clientY - rect.top > 48) return;
+    isDragging = true;
+    startY = touch.clientY;
+    startHeight = sidebar.offsetHeight;
+    sidebar.style.transition = 'none';
+  }, { passive: true });
+
+  sidebar.addEventListener('touchmove', e => {
+    if (!isDragging || !isMobile()) return;
+    const touch = e.touches[0];
+    const delta = startY - touch.clientY;
+    const newHeight = Math.min(
+      Math.max(startHeight + delta, 100), // min 100px
+      window.innerHeight * 0.85           // max 85vh
+    );
+    sidebar.style.minHeight = newHeight + 'px';
+  }, { passive: true });
+
+  sidebar.addEventListener('touchend', () => {
+    if (!isDragging) return;
+    isDragging = false;
+    sidebar.style.transition = '';
+
+    const currentHeight = sidebar.offsetHeight;
+    const vh = window.innerHeight;
+
+    // Snap: jeśli poniżej 20vh — zwiń do minimum, powyżej 60vh — rozwiń do max
+    if (currentHeight < vh * 0.20) {
+      sidebar.style.minHeight = '13rem';
+    } else if (currentHeight > vh * 0.60) {
+      sidebar.style.minHeight = (vh * 0.85) + 'px';
+    }
+    // w środku — zostaw jak jest
+  });
+})();
