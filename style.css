@@ -499,13 +499,13 @@ a:visited {
         z-index: 100;
         flex-basis: auto;
         width: 100%;
-        max-height: 85dvh;
-        min-height: 13rem;
+        height: 5.5rem; /* domyślnie zwinięty — tylko uchwyt */
+        max-height: 88dvh;
         padding: 0 2rem 2rem 2rem;
         border-radius: 2rem 2rem 0 0;
         box-shadow: 0 -4px 24px rgba(0,0,0,0.35);
         overflow: hidden;
-        transition: min-height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: height 0.32s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     /* Uchwyt do przeciągania panelu */
@@ -624,5 +624,47 @@ a:visited {
 
     .btn-route {
         font-size: 1.4rem;
+    }
+}
+
+/* ─── WORKOUT DELETE BUTTON ─── */
+.workout {
+    position: relative;
+}
+
+.workout__delete {
+    position: absolute;
+    top: 0.8rem;
+    right: 0.8rem;
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--color-light--1);
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s, background-color 0.2s, color 0.2s;
+    line-height: 1;
+}
+
+.workout:hover .workout__delete {
+    opacity: 1;
+}
+
+.workout__delete:hover {
+    background-color: #ff6b6b22;
+    color: #ff6b6b;
+}
+
+/* Na mobile zawsze widoczny (brak hovera) */
+@media (max-width: 768px) {
+    .workout__delete {
+        opacity: 1;
+        color: var(--color-light--1);
     }
 }

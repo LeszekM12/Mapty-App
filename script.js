@@ -90,6 +90,7 @@ class App {
   #routeMarkerA = null;
   #routeMarkerB = null;
   #routeActivityMode = 'running'; // 'running' | 'cycling' | 'walking'
+  #markers = new Map(); // id -> L.marker (żeby móc usuwać)
 
   // Średnie prędkości w km/h do przeliczania czasu
   #activitySpeeds = {
@@ -205,7 +206,7 @@ class App {
   }
 
   _renderWorkoutMarker(workout) {
-    L.marker(workout.coords)
+    const marker = L.marker(workout.coords)
       .addTo(this.#map)
       .bindPopup(
         L.popup({
@@ -218,6 +219,8 @@ class App {
       )
       .setPopupContent(`${workout.type === 'running' ? '🏃‍♂️' : '🚴‍♀️'} ${workout.description}`)
       .openPopup();
+
+    this.#markers.set(workout.id, marker);
   }
 
   _renderWorkout(workout) {
@@ -264,14 +267,31 @@ class App {
         </div>
       </li>`;
 
+    // Dodaj przycisk usuwania
+    html = html.replace('</li>', `
+        <button class="workout__delete" data-id="${workout.id}" title="Delete workout">✕</button>
+      </li>`);
+
     form.insertAdjacentHTML('afterend', html);
   }
 
   _moveToPopup(e) {
     if (!this.#map) return;
+
+    // Delete button — musi być sprawdzony PRZED closest('.workout')
+    const deleteBtn = e.target.closest('.workout__delete');
+    if (deleteBtn) {
+      e.stopPropagation();
+      this._deleteWorkout(deleteBtn.dataset.id);
+      return;
+    }
+
     const workoutEl = e.target.closest('.workout');
     if (!workoutEl) return;
+
     const workout = this.#workouts.find(work => work.id === workoutEl.dataset.id);
+    if (!workout) return;
+
     this.#map.setView(workout.coords, this.#mapZoomLevel, {
       animate: true,
       pan: { duration: 1 },
@@ -465,19 +485,36 @@ const app = new App();
 // ─── MOBILE PANEL DRAG ───────────────────────────────────────────
 (function initMobilePanel() {
   const sidebar = document.querySelector('.sidebar');
+  const HANDLE_ZONE = 56; // px od góry sidebara = strefa uchwytu
+
   let startY = 0;
   let startHeight = 0;
   let isDragging = false;
 
   const isMobile = () => window.innerWidth <= 768;
 
-  // Dotyk zaczyna się na uchwycie (::before nie można złapać, więc łapiemy górne 40px sidebara)
+  // Snap helpers
+  const snapTo = h => {
+    sidebar.style.transition = 'height 0.32s cubic-bezier(0.4,0,0.2,1)';
+    sidebar.style.height = h;
+  };
+
+  const collapse = () => snapTo('5.5rem');  // tylko uchwyt
+  const toHalf   = () => snapTo('45vh');    // połowa
+  const toFull   = () => snapTo('85vh');    // pełny
+
+  // Domyślnie zwinięty na mobile
+  if (isMobile()) collapse();
+  window.addEventListener('resize', () => {
+    if (!isMobile()) { sidebar.style.height = ''; sidebar.style.transition = ''; }
+    else collapse();
+  });
+
   sidebar.addEventListener('touchstart', e => {
     if (!isMobile()) return;
     const touch = e.touches[0];
     const rect = sidebar.getBoundingClientRect();
-    // Tylko górne 48px sidebara = uchwyt
-    if (touch.clientY - rect.top > 48) return;
+    if (touch.clientY - rect.top > HANDLE_ZONE) return; // tylko uchwyt
     isDragging = true;
     startY = touch.clientY;
     startHeight = sidebar.offsetHeight;
@@ -488,27 +525,17 @@ const app = new App();
     if (!isDragging || !isMobile()) return;
     const touch = e.touches[0];
     const delta = startY - touch.clientY;
-    const newHeight = Math.min(
-      Math.max(startHeight + delta, 100), // min 100px
-      window.innerHeight * 0.85           // max 85vh
-    );
-    sidebar.style.minHeight = newHeight + 'px';
+    const newH = Math.min(Math.max(startHeight + delta, 50), window.innerHeight * 0.88);
+    sidebar.style.height = newH + 'px';
   }, { passive: true });
 
   sidebar.addEventListener('touchend', () => {
     if (!isDragging) return;
     isDragging = false;
-    sidebar.style.transition = '';
-
-    const currentHeight = sidebar.offsetHeight;
+    const h = sidebar.offsetHeight;
     const vh = window.innerHeight;
-
-    // Snap: jeśli poniżej 20vh — zwiń do minimum, powyżej 60vh — rozwiń do max
-    if (currentHeight < vh * 0.20) {
-      sidebar.style.minHeight = '13rem';
-    } else if (currentHeight > vh * 0.60) {
-      sidebar.style.minHeight = (vh * 0.85) + 'px';
-    }
-    // w środku — zostaw jak jest
+    if      (h < vh * 0.18) collapse();
+    else if (h < vh * 0.60) toHalf();
+    else                     toFull();
   });
 })();
