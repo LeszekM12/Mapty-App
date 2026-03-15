@@ -21,6 +21,14 @@
   <div class="route-controls">
     <button class="btn-route" id="btnRoute">🗺️ Wyznacz trasę A → B</button>
     <div class="route-info hidden" id="routeInfo">
+
+      <!-- Tryb aktywności -->
+      <div class="route-mode-selector">
+        <button class="route-mode-btn route-mode-btn--active" data-mode="running" title="Bieg">🏃‍♂️</button>
+        <button class="route-mode-btn" data-mode="cycling" title="Rower">🚴‍♀️</button>
+        <button class="route-mode-btn" data-mode="walking" title="Marsz">🚶</button>
+      </div>
+
       <div class="route-info__steps">
         <div class="route-info__step">
           <span class="route-info__badge route-info__badge--a">A</span>
@@ -75,6 +83,12 @@
       <button class="form__btn">OK</button>
     </form>
   </ul>
+
+  <p class="copyright">
+    &copy; Copyright by
+    <a class="twitter-link" target="_blank" href="https://twitter.com/jonasschmedtman">Jonas Schmedtmann</a>.
+    Use for learning or your portfolio. Don't use to teach. Don't claim as your own.
+  </p>
 </div>
 <div id="map"></div>
 </body>

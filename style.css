@@ -382,3 +382,32 @@ a:visited {
 .hidden {
     display: none !important;
 }
+
+/* ─── ROUTE MODE SELECTOR ─── */
+.route-mode-selector {
+    display: flex;
+    gap: 0.6rem;
+    margin-bottom: 1.2rem;
+}
+
+.route-mode-btn {
+    flex: 1;
+    padding: 0.8rem;
+    background-color: var(--color-dark--1);
+    border: 2px solid transparent;
+    border-radius: 5px;
+    font-size: 1.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+    line-height: 1;
+}
+
+.route-mode-btn:hover {
+    border-color: var(--color-light--1);
+}
+
+.route-mode-btn--active {
+    border-color: var(--color-brand--2);
+    background-color: rgba(0, 196, 106, 0.12);
+}

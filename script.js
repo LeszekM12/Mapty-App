@@ -88,6 +88,14 @@ class App {
   #routingControl = null;
   #routeMarkerA = null;
   #routeMarkerB = null;
+  #routeActivityMode = 'running'; // 'running' | 'cycling' | 'walking'
+
+  // Średnie prędkości w km/h do przeliczania czasu
+  #activitySpeeds = {
+    running: 10,   // ~6 min/km
+    cycling: 20,   // typowy rower rekreacyjny
+    walking: 5,    // ~12 min/km
+  };
 
   constructor() {
     this._getPosition();
@@ -100,6 +108,11 @@ class App {
     // Route button listeners
     btnRoute.addEventListener('click', this._startRouteMode.bind(this));
     btnCancelRoute.addEventListener('click', this._cancelRoute.bind(this));
+
+    // Activity mode buttons
+    document.querySelectorAll('.route-mode-btn').forEach(btn => {
+      btn.addEventListener('click', this._setActivityMode.bind(this));
+    });
   }
 
   _getPosition() {
@@ -284,6 +297,26 @@ class App {
 
   // ─── ROUTING FEATURE ────────────────────────────────────────────
 
+  _setActivityMode(e) {
+    const btn = e.currentTarget;
+    const mode = btn.dataset.mode;
+    this.#routeActivityMode = mode;
+
+    // Aktualizuj aktywny przycisk
+    document.querySelectorAll('.route-mode-btn').forEach(b => b.classList.remove('route-mode-btn--active'));
+    btn.classList.add('route-mode-btn--active');
+
+    // Jeśli trasa już wyznaczona — przelicz czas na nowo
+    if (this.#routeStep === 3 && !routeResult.classList.contains('hidden')) {
+      const distKm = parseFloat(routeDist.textContent);
+      if (!isNaN(distKm)) {
+        const speed = this.#activitySpeeds[mode];
+        const timeMin = Math.round((distKm / speed) * 60);
+        routeTime.textContent = timeMin;
+      }
+    }
+  }
+
   _startRouteMode() {
     // Hide workout form if open
     if (!form.classList.contains('hidden')) this._hideForm();
@@ -379,7 +412,10 @@ class App {
       .on('routesfound', e => {
         const route = e.routes[0].summary;
         const distKm = (route.totalDistance / 1000).toFixed(2);
-        const timeMin = Math.round(route.totalTime / 60);
+
+        // Przelicz czas na podstawie wybranej aktywności
+        const speed = this.#activitySpeeds[this.#routeActivityMode];
+        const timeMin = Math.round((parseFloat(distKm) / speed) * 60);
 
         routeDist.textContent = distKm;
         routeTime.textContent = timeMin;
