@@ -64,6 +64,13 @@ const routeTime = document.getElementById('routeTime');
 const routeLoading = document.getElementById('routeLoading');
 const btnTrack = document.getElementById('btnTrack');
 
+// ─── PWA SERVICE WORKER ───────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
 // ─── MAIN APP CLASS ──────────────────────────────────────────────
 class App {
   #map;
@@ -71,7 +78,7 @@ class App {
   #mapEvent;
   #workouts = [];
 
-  // Route planner state
+  // Route planner
   #routeMode = false;
   #routeStep = 0;
   #routePointA = null;
@@ -81,16 +88,23 @@ class App {
   #routeMarkerB = null;
   #routeActivityMode = 'running';
 
-  // Route progress state
-  #routeCoords = [];
-  #progressLine = null;
-  #progressWatchId = null;
+  // Route progress
+  #routeCoords = [];           // full route as [[lat,lng],...]
+  #routeTotalDist = 0;         // total route distance in metres
+  #progressLine = null;        // grey "done" polyline
+  #progressWatchId = null;     // dedicated watch when tracking is off
+  #coveredUpToIndex = 0;
+  #arrivedShown = false;       // prevent showing arrival toast multiple times
 
-  // Live tracking state
+  // Live tracking
   #trackingActive = false;
   #watchId = null;
   #trackingMarker = null;
-  #trackingCoords = null; // latest GPS fix while tracking
+  #trackingCoords = null;
+
+  // Lazy centering — don't re-center if user is touching the map
+  #userTouchingMap = false;
+  #recenterTimer = null;
 
   // Wake Lock
   #wakeLock = null;
@@ -98,6 +112,9 @@ class App {
   #markers = new Map();
   #poiMarkers = [];
   #userCoords = null;
+
+  // Autocomplete debounce
+  #autocompleteTimer = null;
 
   #activitySpeeds = { running: 10, cycling: 20, walking: 5 };
 
@@ -140,6 +157,19 @@ class App {
 
     this.#map.on('click', this._handleMapClick.bind(this));
     this.#workouts.forEach(work => this._renderWorkoutMarker(work));
+
+    // Track whether user is interacting with the map
+    // so we can delay re-centering during tracking
+    this.#map.on('mousedown touchstart', () => {
+      this.#userTouchingMap = true;
+      clearTimeout(this.#recenterTimer);
+    });
+    this.#map.on('mouseup touchend', () => {
+      // After 5 seconds of no touch, allow re-centering again
+      this.#recenterTimer = setTimeout(() => {
+        this.#userTouchingMap = false;
+      }, 5000);
+    });
   }
 
   // ─── SCREEN WAKE LOCK ────────────────────────────────────────────
@@ -149,7 +179,7 @@ class App {
       this.#wakeLock = await navigator.wakeLock.request('screen');
       document.addEventListener('visibilitychange', this._handleVisibilityChange.bind(this));
       this._updateWakeLockBadge(true);
-    } catch { /* not available — fail silently */ }
+    } catch { /* not available */ }
   }
 
   async _releaseWakeLock() {
@@ -161,9 +191,8 @@ class App {
   }
 
   async _handleVisibilityChange() {
-    if (this.#wakeLock !== null && document.visibilityState === 'visible' && this.#trackingActive) {
+    if (this.#wakeLock !== null && document.visibilityState === 'visible' && this.#trackingActive)
       await this._requestWakeLock();
-    }
   }
 
   _updateWakeLockBadge(active) {
@@ -182,11 +211,8 @@ class App {
 
   // ─── LIVE TRACKING ───────────────────────────────────────────────
   _toggleTracking() {
-    if (this.#trackingActive) {
-      this._stopTracking();
-    } else {
-      this._startTracking();
-    }
+    if (this.#trackingActive) this._stopTracking();
+    else this._startTracking();
   }
 
   _startTracking() {
@@ -211,14 +237,30 @@ class App {
       position => {
         const { latitude: lat, longitude: lng } = position.coords;
         const latlng = [lat, lng];
-        this.#trackingCoords = latlng; // always keep latest fix
+        this.#trackingCoords = latlng;
 
         if (!this.#trackingMarker) {
           this.#trackingMarker = L.marker(latlng, { icon: dotIcon, zIndexOffset: 1000 }).addTo(this.#map);
           this.#map.setView(latlng, this.#mapZoomLevel, { animate: true });
         } else {
           this.#trackingMarker.setLatLng(latlng);
-          this.#map.setView(latlng, this.#map.getZoom(), { animate: true, pan: { duration: 0.5 } });
+
+          // ── LAZY CENTERING: only re-center if user hasn't touched map in 5s ──
+          if (!this.#userTouchingMap) {
+            const mapCenter = this.#map.getCenter();
+            const markerPt = this.#map.latLngToContainerPoint(L.latLng(latlng));
+            const center = this.#map.getSize().divideBy(2);
+            const offscreen = markerPt.distanceTo(center) > 120; // px threshold
+
+            if (offscreen) {
+              this.#map.setView(latlng, this.#map.getZoom(), { animate: true, pan: { duration: 0.6 } });
+            }
+          }
+        }
+
+        // Update route progress using the same GPS fix
+        if (this.#routeCoords.length > 0 && this.#progressLine) {
+          this._updateRouteProgress(lat, lng);
         }
       },
       () => { alert('Could not get your position for tracking.'); this._stopTracking(); },
@@ -231,7 +273,6 @@ class App {
     this.#trackingCoords = null;
     btnTrack.textContent = '📍 Start tracking';
     btnTrack.classList.remove('tracking--active');
-
     this._releaseWakeLock();
 
     if (this.#watchId !== null) {
@@ -245,44 +286,113 @@ class App {
   }
 
   // ─── ROUTE PROGRESS ──────────────────────────────────────────────
-  _startRouteProgress(routeCoords) {
-    this.#routeCoords = routeCoords;
 
-    if (this.#progressWatchId !== null) {
-      navigator.geolocation.clearWatch(this.#progressWatchId);
-    }
+  _setupRouteProgress(routeCoords, totalDistM) {
+    this.#routeCoords = routeCoords;
+    this.#routeTotalDist = totalDistM;
+    this.#coveredUpToIndex = 0;
+    this.#arrivedShown = false;
+
     if (this.#progressLine) this.#map.removeLayer(this.#progressLine);
 
+    // Thicker white outline + coloured fill = clearly visible over green route
     this.#progressLine = L.polyline([], {
-      color: '#888',
-      weight: 5,
-      opacity: 0.7,
+      color: '#ffffff',
+      weight: 9,
+      opacity: 0.6,
     }).addTo(this.#map);
 
-    let coveredUpToIndex = 0;
+    // Inner grey line on top
+    this._progressLineInner = L.polyline([], {
+      color: '#555555',
+      weight: 5,
+      opacity: 0.9,
+    }).addTo(this.#map);
 
+    if (!this.#trackingActive) this._startProgressOnlyWatch();
+  }
+
+  _startProgressOnlyWatch() {
     this.#progressWatchId = navigator.geolocation.watchPosition(
       position => {
-        const { latitude: lat, longitude: lng } = position.coords;
-        const userPt = L.latLng(lat, lng);
-
-        let closestIdx = coveredUpToIndex;
-        let minDist = Infinity;
-
-        for (let i = coveredUpToIndex; i < this.#routeCoords.length; i++) {
-          const d = userPt.distanceTo(L.latLng(this.#routeCoords[i]));
-          if (d < minDist) { minDist = d; closestIdx = i; }
+        if (!this.#routeCoords.length) {
+          navigator.geolocation.clearWatch(this.#progressWatchId);
+          return;
         }
-
-        if (closestIdx > coveredUpToIndex && minDist < 50) {
-          coveredUpToIndex = closestIdx;
-        }
-
-        this.#progressLine.setLatLngs(this.#routeCoords.slice(0, coveredUpToIndex + 1));
+        this._updateRouteProgress(position.coords.latitude, position.coords.longitude);
       },
-      () => { /* GPS error — progress pauses silently */ },
-      { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
     );
+  }
+
+  _updateRouteProgress(lat, lng) {
+    const userPt = L.latLng(lat, lng);
+    let closestIdx = this.#coveredUpToIndex;
+    let minDist = Infinity;
+
+    for (let i = this.#coveredUpToIndex; i < this.#routeCoords.length; i++) {
+      const d = userPt.distanceTo(L.latLng(this.#routeCoords[i]));
+      if (d < minDist) { minDist = d; closestIdx = i; }
+      if (d > minDist + 150 && i > this.#coveredUpToIndex + 10) break;
+    }
+
+    if (closestIdx > this.#coveredUpToIndex && minDist < 40) {
+      this.#coveredUpToIndex = closestIdx;
+      const covered = this.#routeCoords.slice(0, this.#coveredUpToIndex + 1);
+      this.#progressLine.setLatLngs(covered);
+      this._progressLineInner.setLatLngs(covered);
+
+      // ── Update remaining distance & time in sidebar ──
+      this._updateRemainingStats();
+
+      // ── Check arrival ──
+      const isLastPoint = this.#coveredUpToIndex >= this.#routeCoords.length - 2;
+      const nearDestination = minDist < 30;
+      if ((isLastPoint || nearDestination) && !this.#arrivedShown) {
+        this.#arrivedShown = true;
+        this._showArrivalToast();
+      }
+    }
+  }
+
+  _updateRemainingStats() {
+    if (!this.#routeCoords.length || !routeResult) return;
+
+    // Calculate remaining distance by summing segments from current index onwards
+    let remainM = 0;
+    for (let i = this.#coveredUpToIndex; i < this.#routeCoords.length - 1; i++) {
+      remainM += L.latLng(this.#routeCoords[i]).distanceTo(L.latLng(this.#routeCoords[i + 1]));
+    }
+
+    const remainKm = remainM / 1000;
+    const speed = this.#activitySpeeds[this.#routeActivityMode];
+    const remainMin = Math.round((remainKm / speed) * 60);
+
+    routeDist.textContent = remainKm.toFixed(2);
+    routeTime.textContent = remainMin;
+  }
+
+  _showArrivalToast() {
+    // Remove existing toast if any
+    document.querySelector('.arrival-toast')?.remove();
+
+    const toast = document.createElement('div');
+    toast.className = 'arrival-toast';
+    toast.innerHTML = `
+      <span class="arrival-toast__icon">🎯</span>
+      <div>
+        <strong>You've arrived!</strong>
+        <p>Destination reached.</p>
+      </div>
+      <button class="arrival-toast__close">✕</button>
+    `;
+    document.body.appendChild(toast);
+
+    toast.querySelector('.arrival-toast__close').addEventListener('click', () => toast.remove());
+
+    // Auto-dismiss after 6 seconds
+    setTimeout(() => toast?.remove(), 6000);
   }
 
   _stopRouteProgress() {
@@ -290,20 +400,18 @@ class App {
       navigator.geolocation.clearWatch(this.#progressWatchId);
       this.#progressWatchId = null;
     }
-    if (this.#progressLine) {
-      this.#map.removeLayer(this.#progressLine);
-      this.#progressLine = null;
-    }
+    if (this.#progressLine) { this.#map.removeLayer(this.#progressLine); this.#progressLine = null; }
+    if (this._progressLineInner) { this.#map.removeLayer(this._progressLineInner); this._progressLineInner = null; }
     this.#routeCoords = [];
+    this.#coveredUpToIndex = 0;
+    this.#arrivedShown = false;
+    document.querySelector('.arrival-toast')?.remove();
   }
 
   // ─── MAP CLICK HANDLER ───────────────────────────────────────────
   _handleMapClick(mapE) {
-    if (this.#routeMode) {
-      this._handleRouteClick(mapE);
-    } else {
-      this._showForm(mapE);
-    }
+    if (this.#routeMode) this._handleRouteClick(mapE);
+    else this._showForm(mapE);
   }
 
   _showForm(mapE) {
@@ -491,6 +599,14 @@ class App {
       if (e.key === 'Enter') this._searchPOI(input.value.trim());
     });
 
+    // ── API-based autocomplete: debounce 350ms, min 2 chars ──
+    input.addEventListener('input', () => {
+      clearTimeout(this.#autocompleteTimer);
+      const val = input.value.trim();
+      if (val.length < 2) return;
+      this.#autocompleteTimer = setTimeout(() => this._fetchAutocompleteSuggestions(val), 350);
+    });
+
     filters.addEventListener('click', e => {
       const filterBtn = e.target.closest('.poi-filter-btn');
       if (!filterBtn) return;
@@ -499,6 +615,38 @@ class App {
       input.value = filterBtn.dataset.query;
       this._searchPOI(filterBtn.dataset.query);
     });
+  }
+
+  async _fetchAutocompleteSuggestions(query) {
+    // Use Nominatim suggest endpoint within current map bounds
+    const datalist = document.getElementById('poiSuggestions');
+    if (!datalist) return;
+
+    let url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&addressdetails=0&namedetails=0`;
+
+    if (this.#map) {
+      const bounds = this.#map.getBounds();
+      const sw = bounds.getSouthWest();
+      const ne = bounds.getNorthEast();
+      url += `&viewbox=${sw.lng},${ne.lat},${ne.lng},${sw.lat}&bounded=1`;
+    }
+
+    try {
+      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+      const data = await res.json();
+
+      datalist.innerHTML = '';
+      const seen = new Set();
+      data.forEach(place => {
+        const name = place.name || place.display_name.split(',')[0];
+        if (name && !seen.has(name)) {
+          seen.add(name);
+          const opt = document.createElement('option');
+          opt.value = name;
+          datalist.appendChild(opt);
+        }
+      });
+    } catch { /* fail silently */ }
   }
 
   async _searchPOI(query) {
@@ -583,24 +731,16 @@ class App {
         this.#poiMarkers.push(marker);
       });
 
-      // ── AUTO-ROUTE: if tracking is active, clicking "Set as point A" routes
-      // FROM current GPS position TO the POI automatically ──
       window._poiSetA = (lat, lon) => {
         if (this.#trackingActive && this.#trackingCoords) {
-          // Tracking is on — route FROM current position TO this POI directly
           this._autoRouteFromTracking([lat, lon]);
         } else {
-          // Normal flow — set as point A in route planner
           if (!this.#routeMode) this._startRouteMode();
           this.#routePointA = [lat, lon];
           this.#routeStep = 2;
           if (this.#routeMarkerA) this.#map.removeLayer(this.#routeMarkerA);
           this.#routeMarkerA = L.marker([lat, lon], {
-            icon: L.divIcon({
-              className: '',
-              html: '<div class="route-marker route-marker--a">A</div>',
-              iconSize: [28, 28], iconAnchor: [14, 14],
-            }),
+            icon: L.divIcon({ className: '', html: '<div class="route-marker route-marker--a">A</div>', iconSize: [28, 28], iconAnchor: [14, 14] }),
           }).addTo(this.#map);
           document.getElementById('stepAText').textContent = 'Start point set ✓';
           document.getElementById('stepAText').closest('.route-info__step').classList.add('route-info__step--done');
@@ -617,14 +757,10 @@ class App {
   }
 
   // ─── AUTO-ROUTE FROM TRACKING POSITION ───────────────────────────
-  // Called when tracking is active and user picks a destination.
-  // Sets point A = current GPS, point B = destination, draws route immediately.
   _autoRouteFromTracking(destCoords) {
     if (!this.#trackingCoords) return;
 
     this.#map.closePopup();
-
-    // Prepare route mode state
     this.#routeMode = true;
     this.#routeStep = 3;
     this.#routePointA = [...this.#trackingCoords];
@@ -634,24 +770,14 @@ class App {
     routeInfo.classList.remove('hidden');
     routeResult.classList.add('hidden');
 
-    // Place marker A at current GPS position
     if (this.#routeMarkerA) this.#map.removeLayer(this.#routeMarkerA);
     this.#routeMarkerA = L.marker(this.#routePointA, {
-      icon: L.divIcon({
-        className: '',
-        html: '<div class="route-marker route-marker--a">A</div>',
-        iconSize: [28, 28], iconAnchor: [14, 14],
-      }),
+      icon: L.divIcon({ className: '', html: '<div class="route-marker route-marker--a">A</div>', iconSize: [28, 28], iconAnchor: [14, 14] }),
     }).addTo(this.#map);
 
-    // Place marker B at destination
     if (this.#routeMarkerB) this.#map.removeLayer(this.#routeMarkerB);
     this.#routeMarkerB = L.marker(destCoords, {
-      icon: L.divIcon({
-        className: '',
-        html: '<div class="route-marker route-marker--b">B</div>',
-        iconSize: [28, 28], iconAnchor: [14, 14],
-      }),
+      icon: L.divIcon({ className: '', html: '<div class="route-marker route-marker--b">B</div>', iconSize: [28, 28], iconAnchor: [14, 14] }),
     }).addTo(this.#map);
 
     stepAText.textContent = 'Your position ✓';
@@ -678,13 +804,14 @@ class App {
 
   _poiEmoji(query) {
     if (/grocery|store|shop|market|sklep|żabka|biedronk|lidl/i.test(query)) return '🛒';
-    if (/water|fountain|woda|fontanna|jezioro|staw|rzeka/i.test(query)) return '💧';
+    if (/water|fountain|woda|fontanna/i.test(query)) return '💧';
     if (/toilet|wc|restroom|toaleta/i.test(query)) return '🚻';
     if (/pharmacy|chemist|apteka/i.test(query)) return '💊';
     if (/park|forest|las|garden/i.test(query)) return '🌳';
     if (/cafe|coffee|kawiarnia/i.test(query)) return '☕';
     if (/hospital|clinic|doctor|szpital/i.test(query)) return '🏥';
     if (/restaurant|restauracja|bar|pub/i.test(query)) return '🍴';
+    if (/church|kościół|parafia|pw/i.test(query)) return '✝️';
     return '📍';
   }
 
@@ -709,9 +836,7 @@ class App {
 
     if (this.#routeStep === 3 && !routeResult.classList.contains('hidden')) {
       const distKm = parseFloat(routeDist.textContent);
-      if (!isNaN(distKm)) {
-        routeTime.textContent = Math.round((distKm / this.#activitySpeeds[mode]) * 60);
-      }
+      if (!isNaN(distKm)) routeTime.textContent = Math.round((distKm / this.#activitySpeeds[mode]) * 60);
     }
   }
 
@@ -734,7 +859,6 @@ class App {
 
     document.getElementById('map').style.cursor = 'crosshair';
 
-    // ── AUTO-ROUTE: if tracking active, set point A to current GPS immediately ──
     if (this.#trackingActive && this.#trackingCoords) {
       const [lat, lng] = this.#trackingCoords;
       this.#routePointA = [lat, lng];
@@ -742,11 +866,7 @@ class App {
 
       if (this.#routeMarkerA) this.#map.removeLayer(this.#routeMarkerA);
       this.#routeMarkerA = L.marker([lat, lng], {
-        icon: L.divIcon({
-          className: '',
-          html: '<div class="route-marker route-marker--a">A</div>',
-          iconSize: [28, 28], iconAnchor: [14, 14],
-        }),
+        icon: L.divIcon({ className: '', html: '<div class="route-marker route-marker--a">A</div>', iconSize: [28, 28], iconAnchor: [14, 14] }),
       }).addTo(this.#map);
 
       stepAText.textContent = 'Your position ✓';
@@ -815,15 +935,15 @@ class App {
       .on('routesfound', e => {
         routeLoading.classList.add('hidden');
         const route = e.routes[0];
-        const distKm = (route.summary.totalDistance / 1000).toFixed(2);
+        const totalDistM = route.summary.totalDistance;
+        const distKm = (totalDistM / 1000).toFixed(2);
         const speed = this.#activitySpeeds[this.#routeActivityMode];
         routeDist.textContent = distKm;
         routeTime.textContent = Math.round((parseFloat(distKm) / speed) * 60);
         routeResult.classList.remove('hidden');
 
-        // Start greying out the route as user walks it
         const coords = route.coordinates.map(c => [c.lat, c.lng]);
-        this._startRouteProgress(coords);
+        this._setupRouteProgress(coords, totalDistM);
       })
       .on('routingerror', () => {
         routeLoading.classList.add('hidden');
