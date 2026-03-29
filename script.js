@@ -141,9 +141,13 @@ class App {
   #activitySpeeds = { running: 10, cycling: 20, walking: 5 };
 
   // Weekly stats
-  #goalKm = 35;
+  #goalKm    = 35;
+  #goalTime  = 300;
   #goalCount = 7;
-  #statsExpanded = false;
+  #statsExpanded     = false;
+  #statsWeekOffset   = 0;   // 0 = current week, -1 = last week, etc.
+  #statsSelectedDay  = null; // 0-6 (Mon-Sun) or null = week total
+  #statsPrevGoalReached = false; // track if 100% was already celebrated
 
   constructor() {
     this._getPosition();
@@ -165,6 +169,7 @@ class App {
     this._initFilterScroll();
     this._initPWAInstall();
     this._initStats();
+    this._initIOSBanner();
 
     // Restore preferences
     if (localStorage.getItem('nightMode') === 'true') {
@@ -176,10 +181,12 @@ class App {
       this.#voiceEnabled = true;
       document.getElementById('voiceToggle')?.classList.add('active');
     }
-    const savedGoalKm = localStorage.getItem('goalKm');
-    const savedGoalCount = localStorage.getItem('goalCount');
-    if (savedGoalKm) this.#goalKm = +savedGoalKm;
-    if (savedGoalCount) this.#goalCount = +savedGoalCount;
+    const sk = localStorage.getItem('goalKm');
+    const st = localStorage.getItem('goalTime');
+    const sc = localStorage.getItem('goalCount');
+    if (sk) this.#goalKm    = +sk;
+    if (st) this.#goalTime  = +st;
+    if (sc) this.#goalCount = +sc;
   }
 
   // ─── GEOLOCATION ─────────────────────────────────────────────────
@@ -675,7 +682,7 @@ class App {
     this._renderWorkout(workout);
     this._hideForm();
     this._setLocalStorage();
-    this._renderStats();
+    this._renderStats(true);
   }
 
   _renderWorkoutMarker(workout) {
@@ -776,16 +783,31 @@ class App {
 
   reset() { localStorage.removeItem('workouts'); location.reload(); }
 
-  // ─── WEEKLY STATS ─────────────────────────────────────────────────
-  // Data source: this.#workouts (already in memory from localStorage).
-  // A "week" = Mon 00:00 to Sun 23:59 of the current calendar week.
+  // ─── iOS INSTALL BANNER ──────────────────────────────────────────
+  _initIOSBanner() {
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    const dismissed = localStorage.getItem('iosBannerDismissed');
+    if (!isIOS || isStandalone || dismissed) return;
 
-  _getWeekBounds() {
+    const banner = document.getElementById('iosInstallBanner');
+    const closeBtn = document.getElementById('iosInstallClose');
+    if (!banner) return;
+
+    setTimeout(() => banner.classList.remove('hidden'), 2000);
+    closeBtn?.addEventListener('click', () => {
+      banner.classList.add('hidden');
+      localStorage.setItem('iosBannerDismissed', '1');
+    });
+  }
+
+  // ─── WEEKLY STATS ─────────────────────────────────────────────────
+  _getWeekBounds(offsetWeeks = 0) {
     const now = new Date();
-    const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon…
+    const dayOfWeek = now.getDay();
     const diffToMon = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
     const mon = new Date(now);
-    mon.setDate(now.getDate() + diffToMon);
+    mon.setDate(now.getDate() + diffToMon + offsetWeeks * 7);
     mon.setHours(0, 0, 0, 0);
     const sun = new Date(mon);
     sun.setDate(mon.getDate() + 6);
@@ -793,8 +815,8 @@ class App {
     return { mon, sun };
   }
 
-  _getWeekWorkouts() {
-    const { mon, sun } = this._getWeekBounds();
+  _getWeekWorkouts(offsetWeeks = 0) {
+    const { mon, sun } = this._getWeekBounds(offsetWeeks);
     return this.#workouts.filter(w => {
       const d = new Date(w.date);
       return d >= mon && d <= sun;
@@ -802,33 +824,64 @@ class App {
   }
 
   _initStats() {
-    const panel = document.getElementById('statsPanel');
+    const panel  = document.getElementById('statsPanel');
     const detail = document.getElementById('statsDetail');
     const editor = document.getElementById('statsGoalEditor');
-    const inKm  = document.getElementById('goalKmInput');
-    const inCnt = document.getElementById('goalCountInput');
+    const inKm   = document.getElementById('goalKmInput');
+    const inTime = document.getElementById('goalTimeInput');
+    const inCnt  = document.getElementById('goalCountInput');
+    const prevBtn = document.getElementById('statsWeekPrev');
+    const nextBtn = document.getElementById('statsWeekNext');
 
     if (!panel) return;
 
     // Set saved goal values in inputs
-    if (inKm)  inKm.value  = this.#goalKm;
-    if (inCnt) inCnt.value = this.#goalCount;
+    if (inKm)   inKm.value   = this.#goalKm;
+    if (inTime) inTime.value  = this.#goalTime;
+    if (inCnt)  inCnt.value  = this.#goalCount;
 
-    // Toggle detail + goal editor on panel click
+    // Toggle detail + editor on panel click
     panel.addEventListener('click', () => {
       this.#statsExpanded = !this.#statsExpanded;
       detail?.classList.toggle('hidden', !this.#statsExpanded);
       editor?.classList.toggle('hidden', !this.#statsExpanded);
     });
 
-    // Goal inputs — save on change and re-render
+    // Prevent input clicks from toggling the panel
+    detail?.addEventListener('click', e => e.stopPropagation());
+    editor?.addEventListener('click', e => e.stopPropagation());
+
+    // Week navigation
+    prevBtn?.addEventListener('click', e => {
+      e.stopPropagation();
+      this.#statsWeekOffset--;
+      this.#statsSelectedDay = null;
+      nextBtn.disabled = false;
+      this._renderStats();
+    });
+    nextBtn?.addEventListener('click', e => {
+      e.stopPropagation();
+      if (this.#statsWeekOffset < 0) {
+        this.#statsWeekOffset++;
+        this.#statsSelectedDay = null;
+        if (this.#statsWeekOffset === 0) nextBtn.disabled = true;
+        this._renderStats();
+      }
+    });
+
+    // Goal inputs
     inKm?.addEventListener('change', () => {
       this.#goalKm = Math.max(1, +inKm.value || 35);
       inKm.value = this.#goalKm;
       localStorage.setItem('goalKm', this.#goalKm);
       this._renderStats();
     });
-
+    inTime?.addEventListener('change', () => {
+      this.#goalTime = Math.max(1, +inTime.value || 300);
+      inTime.value = this.#goalTime;
+      localStorage.setItem('goalTime', this.#goalTime);
+      this._renderStats();
+    });
     inCnt?.addEventListener('change', () => {
       this.#goalCount = Math.max(1, +inCnt.value || 7);
       inCnt.value = this.#goalCount;
@@ -836,95 +889,183 @@ class App {
       this._renderStats();
     });
 
-    // Stop panel click from closing settings when inside stats
-    detail?.addEventListener('click', e => e.stopPropagation());
-    editor?.addEventListener('click', e => e.stopPropagation());
-
     this._renderStats();
   }
 
-  _renderStats() {
-    const weekW = this._getWeekWorkouts();
+  _renderStats(animate = false) {
+    const offset   = this.#statsWeekOffset;
+    const weekW    = this._getWeekWorkouts(offset);
+    const { mon }  = this._getWeekBounds(offset);
 
-    // ── Aggregates ──
-    const totalKm  = weekW.reduce((s, w) => s + (w.distance || 0), 0);
-    const totalMin = weekW.reduce((s, w) => s + (w.duration || 0), 0);
-    const totalCnt = weekW.length;
+    // ── Aggregates (whole week or selected day) ──
+    let subset = weekW;
+    if (this.#statsSelectedDay !== null) {
+      subset = weekW.filter(w => {
+        const d = new Date(w.date);
+        const diff = Math.floor((d - mon) / 86400000);
+        return diff === this.#statsSelectedDay;
+      });
+    }
 
-    // ── Ring circumference = 2π×28 ≈ 175.9 ──
-    const CIRC = 175.9;
-    const ring = (id, pct) => {
+    const totalKm  = subset.reduce((s, w) => s + (w.distance || 0), 0);
+    const totalMin = subset.reduce((s, w) => s + (w.duration  || 0), 0);
+    const totalCnt = subset.length;
+
+    // ── Circumference for r=36 ring: 2π×36 ≈ 226.2 ──
+    const CIRC = 226.2;
+    const setRing = (id, pct) => {
       const el = document.getElementById(id);
       if (!el) return;
       const offset = CIRC - Math.min(pct, 1) * CIRC;
-      el.setAttribute('stroke-dashoffset', offset.toFixed(1));
+      if (animate) {
+        el.classList.remove('animate');
+        void el.offsetWidth; // reflow to restart animation
+        el.classList.add('animate');
+        el.setAttribute('stroke-dashoffset', CIRC); // start empty
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            el.setAttribute('stroke-dashoffset', offset.toFixed(1));
+          });
+        });
+      } else {
+        el.setAttribute('stroke-dashoffset', offset.toFixed(1));
+      }
     };
 
-    ring('statsRingKm',       totalKm   / this.#goalKm);
-    ring('statsRingWorkouts', totalCnt  / this.#goalCount);
-    ring('statsRingTime',     Math.min(totalMin / 300, 1)); // 300 min = 5h reference
+    // Use whole-week totals for ring fill (not selected day)
+    const weekKm  = weekW.reduce((s, w) => s + (w.distance || 0), 0);
+    const weekMin = weekW.reduce((s, w) => s + (w.duration  || 0), 0);
+    const weekCnt = weekW.length;
 
-    // ── Value labels ──
-    const fmt = n => n.toFixed(1);
+    setRing('statsRingKm',       weekKm  / this.#goalKm);
+    setRing('statsRingTime',     weekMin / this.#goalTime);
+    setRing('statsRingWorkouts', weekCnt / this.#goalCount);
+
+    // ── Labels ──
     const fmtTime = m => m >= 60
-      ? `${Math.floor(m / 60)}h ${m % 60}m`
+      ? `${Math.floor(m / 60)}h ${Math.round(m % 60)}m`
       : `${Math.round(m)}m`;
-
     const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-    setTxt('statsValKm',       fmt(totalKm));
-    setTxt('statsValTime',     fmtTime(totalMin));
-    setTxt('statsValWorkouts', totalCnt);
 
-    // ── Goal bar (based on km) ──
-    const goalPct = Math.min(Math.round((totalKm / this.#goalKm) * 100), 100);
+    setTxt('statsValKm',       weekKm.toFixed(1));
+    setTxt('statsValTime',     fmtTime(weekMin));
+    setTxt('statsValWorkouts', weekCnt);
+
+    // ── Goal bar (km based) ──
+    const goalPct = Math.min(Math.round((weekKm / this.#goalKm) * 100), 100);
     setTxt('statsGoalPct', goalPct + '%');
     const fill = document.getElementById('statsGoalFill');
     if (fill) fill.style.width = goalPct + '%';
 
-    // ── Detail totals ──
-    setTxt('statsDetailKm',    fmt(totalKm));
+    // ── Goal reached celebration ──
+    if (goalPct >= 100 && !this.#statsPrevGoalReached && animate) {
+      this.#statsPrevGoalReached = true;
+      this._showGoalCelebration();
+    } else if (goalPct < 100) {
+      this.#statsPrevGoalReached = false;
+    }
+
+    // ── Week nav label ──
+    if (offset === 0) {
+      setTxt('statsWeekLabel', 'This week');
+    } else {
+      const mo = mon.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+      const su = new Date(mon); su.setDate(mon.getDate() + 6);
+      const suStr = su.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+      setTxt('statsWeekLabel', `${mo}–${suStr}`);
+    }
+
+    // ── Detail totals (subset — selected day or whole week) ──
+    setTxt('statsDetailKm',    totalKm.toFixed(1));
     setTxt('statsDetailTime',  fmtTime(totalMin));
     setTxt('statsDetailCount', totalCnt);
 
-    // ── Bar chart: km per day Mon–Sun ──
-    this._renderDayBars(weekW);
+    // Date label: show selected day's date or week range start
+    if (this.#statsSelectedDay !== null) {
+      const selDate = new Date(mon);
+      selDate.setDate(mon.getDate() + this.#statsSelectedDay);
+      setTxt('statsDetailDate', selDate.getDate());
+    } else {
+      setTxt('statsDetailDate', '—');
+    }
+
+    this._renderDayBars(weekW, mon);
   }
 
-  _renderDayBars(weekWorkouts) {
+  _renderDayBars(weekWorkouts, mon) {
     const barsEl = document.getElementById('statsDetailBars');
     if (!barsEl) return;
 
     const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const { mon } = this._getWeekBounds();
-    const kmPerDay = Array(7).fill(0);
-    const typPerDay = Array(7).fill('none');
+    const kmPerDay   = Array(7).fill(0);
+    const typPerDay  = Array(7).fill('none');
+    const datePerDay = Array(7).fill(null);
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(mon);
+      d.setDate(mon.getDate() + i);
+      datePerDay[i] = d.getDate();
+    }
 
     weekWorkouts.forEach(w => {
-      const d = new Date(w.date);
+      const d    = new Date(w.date);
       const diff = Math.floor((d - mon) / 86400000);
       if (diff >= 0 && diff < 7) {
-        kmPerDay[diff] += w.distance || 0;
-        typPerDay[diff] = w.type; // last type wins
+        kmPerDay[diff]  += w.distance || 0;
+        typPerDay[diff]  = w.type;
       }
     });
 
-    const maxKm = Math.max(...kmPerDay, 1);
-    const BAR_H = 48; // px available height
+    const maxKm = Math.max(...kmPerDay, 0.1);
+    const BAR_H = 48;
 
     barsEl.innerHTML = DAY_NAMES.map((name, i) => {
-      const km  = kmPerDay[i];
-      const h   = Math.round((km / maxKm) * BAR_H);
-      const color = typPerDay[i] === 'running'
-        ? '#00c46a'
-        : typPerDay[i] === 'cycling'
-          ? '#ffb545'
-          : '#42484d';
+      const km    = kmPerDay[i];
+      const h     = Math.round((km / maxKm) * BAR_H);
+      const color = typPerDay[i] === 'running'  ? '#00c46a'
+        : typPerDay[i] === 'cycling'  ? '#ffb545'
+          : '#3a4147';
+      const isActive = this.#statsSelectedDay === i;
       return `
-        <div class="stats-detail__day-col">
-          <div class="stats-detail__bar" style="height:${Math.max(h, km > 0 ? 3 : 2)}px;background:${color}"></div>
+        <div class="stats-detail__day-col${isActive ? ' active' : ''}" data-day="${i}">
+          <div class="stats-detail__bar" style="height:${Math.max(h, km > 0 ? 4 : 2)}px;background:${color}"></div>
           <div class="stats-detail__day-name">${name}</div>
+          <div class="stats-detail__day-date">${datePerDay[i]}</div>
         </div>`;
     }).join('');
+
+    // Click handler for day selection
+    barsEl.querySelectorAll('.stats-detail__day-col').forEach(col => {
+      col.addEventListener('click', e => {
+        e.stopPropagation();
+        const day = +col.dataset.day;
+        this.#statsSelectedDay = this.#statsSelectedDay === day ? null : day;
+        this._renderStats();
+      });
+    });
+  }
+
+  _showGoalCelebration() {
+    // Animate stats panel border
+    const panel = document.getElementById('statsPanel');
+    panel?.classList.add('goal-reached');
+    setTimeout(() => panel?.classList.remove('goal-reached'), 800);
+
+    // Show celebration toast
+    document.querySelector('.stats-goal-toast')?.remove();
+    const toast = document.createElement('div');
+    toast.className = 'stats-goal-toast';
+    toast.innerHTML = `
+      <span class="stats-goal-toast__emoji">🏆</span>
+      <span class="stats-goal-toast__title">Weekly goal reached!</span>
+      <span class="stats-goal-toast__sub">Amazing work — you crushed your weekly target 🎉</span>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      toast.style.transition = 'opacity 0.5s ease';
+      toast.style.opacity = '0';
+      setTimeout(() => toast.remove(), 500);
+    }, 3500);
   }
 
   // ─── POI SEARCH ──────────────────────────────────────────────────
@@ -1260,10 +1401,16 @@ const app = new App();
   let startY = 0, startHeight = 0, isDragging = false;
 
   const isMobile = () => window.innerWidth <= 768;
-  const snapTo = h => { sidebar.style.transition = 'height 0.32s cubic-bezier(0.4,0,0.2,1)'; sidebar.style.height = h; };
+  const snapTo = h => {
+    sidebar.style.transition = 'height 0.32s cubic-bezier(0.4,0,0.2,1)';
+    sidebar.style.height = h;
+    // Allow scroll at full height
+    sidebar.style.overflowY = h === '100vh' ? 'auto' : 'auto';
+  };
   const collapse = () => snapTo('5.5rem');
   const toHalf   = () => snapTo('55vh');
-  const toFull   = () => snapTo('85vh');
+  const toTall   = () => snapTo('80vh');
+  const toFull   = () => snapTo('100vh');
 
   if (isMobile()) toHalf();
 
@@ -1286,17 +1433,18 @@ const app = new App();
   sidebar.addEventListener('touchmove', e => {
     if (!isDragging || !isMobile()) return;
     const delta = startY - e.touches[0].clientY;
-    const newH = Math.min(Math.max(startHeight + delta, 50), window.innerHeight * 0.88);
+    const newH = Math.min(Math.max(startHeight + delta, 50), window.innerHeight);
     sidebar.style.height = newH + 'px';
   }, { passive: true });
 
   sidebar.addEventListener('touchend', () => {
     if (!isDragging) return;
     isDragging = false;
-    const h = sidebar.offsetHeight;
+    const h  = sidebar.offsetHeight;
     const vh = window.innerHeight;
     if      (h < vh * 0.18) collapse();
     else if (h < vh * 0.65) toHalf();
+    else if (h < vh * 0.90) toTall();
     else                     toFull();
   });
 })();
