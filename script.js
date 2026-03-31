@@ -140,7 +140,7 @@ class App {
 
   #activitySpeeds = { running: 10, cycling: 20, walking: 5 };
 
-  // Weekly stats — goals loaded from localStorage at field declaration (fixes reset bug)
+  // Goals loaded at field declaration — fixes reset-on-refresh bug
   #goalKm    = +(localStorage.getItem('goalKm')    || 35);
   #goalTime  = +(localStorage.getItem('goalTime')  || 300);
   #goalCount = +(localStorage.getItem('goalCount') || 7);
@@ -619,11 +619,13 @@ class App {
 
     if (window.innerWidth <= 768) {
       const sidebar = document.querySelector('.sidebar');
-      requestAnimationFrame(() => {
-        sidebar.style.transition = 'height 0.32s cubic-bezier(0.4,0,0.2,1)';
-        const needed = sidebar.scrollHeight;
-        sidebar.style.height = Math.min(Math.max(needed, window.innerHeight * 0.55), window.innerHeight * 0.85) + 'px';
-      });
+      // Snap to 85vh so the form is always fully visible, then scroll form into view
+      sidebar.style.transition = 'height 0.32s cubic-bezier(0.4,0,0.2,1)';
+      sidebar.style.height = Math.min(window.innerHeight * 0.85, window.innerHeight) + 'px';
+      // After transition, scroll to ensure form is visible
+      setTimeout(() => {
+        form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 350);
     }
   }
 
@@ -637,6 +639,7 @@ class App {
       const sidebar = document.querySelector('.sidebar');
       sidebar.style.transition = 'height 0.32s cubic-bezier(0.4,0,0.2,1)';
       sidebar.style.height = '55vh';
+      sidebar.scrollTop = 0;
     }
   }
 
@@ -777,38 +780,28 @@ class App {
 
   reset() { localStorage.removeItem('workouts'); location.reload(); }
 
-  // ─── iOS INSTALL BANNER ──────────────────────────────────────────
-  // Shows only on iOS Safari that hasn't installed the app yet.
-  // Dismissed state persists in localStorage.
+  // ─── iOS BANNER ──────────────────────────────────────────────────
   _initIOSBanner() {
-    const ua = navigator.userAgent;
-    const isIOS = /iphone|ipad|ipod/i.test(ua);
-    // standalone = already installed
-    const isStandalone = ('standalone' in window.navigator && window.navigator.standalone)
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isStandalone = ('standalone' in navigator && navigator.standalone)
       || window.matchMedia('(display-mode: standalone)').matches;
-    if (!isIOS || isStandalone) return;
-    if (localStorage.getItem('iosBannerDismissed')) return;
-
-    const banner   = document.getElementById('iosInstallBanner');
-    const closeBtn = document.getElementById('iosInstallClose');
+    if (!isIOS || isStandalone || localStorage.getItem('iosBannerDismissed')) return;
+    const banner = document.getElementById('iosInstallBanner');
+    const close  = document.getElementById('iosInstallClose');
     if (!banner) return;
-
-    // Show after 2.5 s so the map has time to load first
     setTimeout(() => banner.classList.remove('hidden'), 2500);
-
-    closeBtn?.addEventListener('click', () => {
+    close?.addEventListener('click', () => {
       banner.classList.add('hidden');
       localStorage.setItem('iosBannerDismissed', '1');
     });
   }
 
   // ─── WEEKLY STATS ────────────────────────────────────────────────
-  _getWeekBounds(offsetWeeks = 0) {
+  _getWeekBounds(off = 0) {
     const now = new Date();
     const dow = now.getDay();
-    const diffToMon = dow === 0 ? -6 : 1 - dow;
     const mon = new Date(now);
-    mon.setDate(now.getDate() + diffToMon + offsetWeeks * 7);
+    mon.setDate(now.getDate() + (dow === 0 ? -6 : 1 - dow) + off * 7);
     mon.setHours(0, 0, 0, 0);
     const sun = new Date(mon);
     sun.setDate(mon.getDate() + 6);
@@ -816,8 +809,8 @@ class App {
     return { mon, sun };
   }
 
-  _getWeekWorkouts(offsetWeeks = 0) {
-    const { mon, sun } = this._getWeekBounds(offsetWeeks);
+  _getWeekWorkouts(off = 0) {
+    const { mon, sun } = this._getWeekBounds(off);
     return this.#workouts.filter(w => { const d = new Date(w.date); return d >= mon && d <= sun; });
   }
 
@@ -832,7 +825,6 @@ class App {
     const nextBtn = document.getElementById('statsWeekNext');
     if (!panel) return;
 
-    // Sync inputs with already-loaded goal values (fixes goal reset bug)
     if (inKm)   inKm.value   = this.#goalKm;
     if (inTime) inTime.value = this.#goalTime;
     if (inCnt)  inCnt.value  = this.#goalCount;
@@ -861,30 +853,23 @@ class App {
       this._renderStats();
     });
 
-    inKm?.addEventListener('change', () => {
-      this.#goalKm = Math.max(1, +inKm.value || 35);
-      inKm.value = this.#goalKm;
-      localStorage.setItem('goalKm', this.#goalKm);
-      this._renderStats();
-    });
-    inTime?.addEventListener('change', () => {
-      this.#goalTime = Math.max(1, +inTime.value || 300);
-      inTime.value = this.#goalTime;
-      localStorage.setItem('goalTime', this.#goalTime);
-      this._renderStats();
-    });
-    inCnt?.addEventListener('change', () => {
-      this.#goalCount = Math.max(1, +inCnt.value || 7);
-      inCnt.value = this.#goalCount;
-      localStorage.setItem('goalCount', this.#goalCount);
-      this._renderStats();
-    });
+    const saveGoal = (field, key, el, fallback) => {
+      el?.addEventListener('change', () => {
+        this[field] = Math.max(1, +el.value || fallback);
+        el.value = this[field];
+        localStorage.setItem(key, this[field]);
+        this._renderStats();
+      });
+    };
+    saveGoal('#goalKm',    'goalKm',    inKm,   35);
+    saveGoal('#goalTime',  'goalTime',  inTime, 300);
+    saveGoal('#goalCount', 'goalCount', inCnt,  7);
   }
 
   _renderStats(animate = false) {
-    const offset  = this.#statsWeekOffset;
-    const weekW   = this._getWeekWorkouts(offset);
-    const { mon } = this._getWeekBounds(offset);
+    const off   = this.#statsWeekOffset;
+    const weekW = this._getWeekWorkouts(off);
+    const { mon } = this._getWeekBounds(off);
 
     const weekKm  = weekW.reduce((s, w) => s + (w.distance || 0), 0);
     const weekMin = weekW.reduce((s, w) => s + (w.duration  || 0), 0);
@@ -901,41 +886,41 @@ class App {
     const setRing = (id, pct) => {
       const el = document.getElementById(id);
       if (!el) return;
-      const off = Math.max(0, CIRC - Math.min(pct, 1) * CIRC);
+      const target = Math.max(0, CIRC - Math.min(pct, 1) * CIRC);
       if (animate) {
         el.style.transition = 'none';
         el.setAttribute('stroke-dashoffset', CIRC);
         void el.getBoundingClientRect();
         el.style.transition = 'stroke-dashoffset 0.9s cubic-bezier(0.4,0,0.2,1)';
       }
-      requestAnimationFrame(() => el.setAttribute('stroke-dashoffset', off.toFixed(1)));
+      requestAnimationFrame(() => el.setAttribute('stroke-dashoffset', target.toFixed(1)));
     };
 
     setRing('statsRingKm',       weekKm  / this.#goalKm);
     setRing('statsRingTime',     weekMin / this.#goalTime);
     setRing('statsRingWorkouts', weekCnt / this.#goalCount);
 
-    const fmtT = m => m >= 60 ? `${Math.floor(m / 60)}h ${Math.round(m % 60)}m` : `${Math.round(m)}m`;
+    const fmtT = m => m >= 60 ? `${Math.floor(m/60)}h ${Math.round(m%60)}m` : `${Math.round(m)}m`;
     const set  = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
 
     set('statsValKm',       weekKm.toFixed(1));
     set('statsValTime',     fmtT(weekMin));
     set('statsValWorkouts', weekCnt);
 
-    const goalPct = Math.min(Math.round((weekKm / this.#goalKm) * 100), 100);
-    set('statsGoalPct', goalPct + '%');
+    const pct = Math.min(Math.round((weekKm / this.#goalKm) * 100), 100);
+    set('statsGoalPct', pct + '%');
     const fill = document.getElementById('statsGoalFill');
-    if (fill) fill.style.width = goalPct + '%';
+    if (fill) fill.style.width = pct + '%';
 
-    if (goalPct >= 100 && !this.#statsPrevGoalReached && animate) {
+    if (pct >= 100 && !this.#statsPrevGoalReached && animate) {
       this.#statsPrevGoalReached = true;
       this._showGoalCelebration();
-    } else if (goalPct < 100) {
+    } else if (pct < 100) {
       this.#statsPrevGoalReached = false;
     }
 
     const nextBtn = document.getElementById('statsWeekNext');
-    if (offset === 0) {
+    if (off === 0) {
       set('statsWeekLabel', 'This week');
       if (nextBtn) nextBtn.disabled = true;
     } else {
@@ -948,10 +933,9 @@ class App {
     set('statsDetailKm',    subKm.toFixed(1));
     set('statsDetailTime',  fmtT(subMin));
     set('statsDetailCount', subCnt);
-    if (this.#statsSelectedDay !== null) {
-      const sel = new Date(mon); sel.setDate(mon.getDate() + this.#statsSelectedDay);
-      set('statsDetailDate', sel.getDate());
-    } else { set('statsDetailDate', '—'); }
+    set('statsDetailDate',  this.#statsSelectedDay !== null
+      ? (() => { const d = new Date(mon); d.setDate(mon.getDate() + this.#statsSelectedDay); return d.getDate(); })()
+      : '—');
 
     this._renderDayBars(weekW, mon);
   }
@@ -959,31 +943,30 @@ class App {
   _renderDayBars(weekWorkouts, mon) {
     const barsEl = document.getElementById('statsDetailBars');
     if (!barsEl) return;
-    const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const kmPerDay  = Array(7).fill(0);
-    const typPerDay = Array(7).fill('none');
-    const datePerDay = Array(7);
-    for (let i = 0; i < 7; i++) { const d = new Date(mon); d.setDate(mon.getDate() + i); datePerDay[i] = d.getDate(); }
+    const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const km  = Array(7).fill(0);
+    const typ = Array(7).fill('none');
+    const dates = Array(7);
+    for (let i = 0; i < 7; i++) { const d = new Date(mon); d.setDate(mon.getDate() + i); dates[i] = d.getDate(); }
     weekWorkouts.forEach(w => {
-      const diff = Math.floor((new Date(w.date) - mon) / 86400000);
-      if (diff >= 0 && diff < 7) { kmPerDay[diff] += w.distance || 0; typPerDay[diff] = w.type; }
+      const i = Math.floor((new Date(w.date) - mon) / 86400000);
+      if (i >= 0 && i < 7) { km[i] += w.distance || 0; typ[i] = w.type; }
     });
-    const maxKm = Math.max(...kmPerDay, 0.1);
-    barsEl.innerHTML = DAY_NAMES.map((name, i) => {
-      const km = kmPerDay[i];
-      const h = Math.round((km / maxKm) * 48);
-      const color = typPerDay[i] === 'running' ? '#00c46a' : typPerDay[i] === 'cycling' ? '#ffb545' : '#3a4147';
-      const act = this.#statsSelectedDay === i ? ' active' : '';
-      return `<div class="stats-detail__day-col${act}" data-day="${i}"><div class="stats-detail__bar" style="height:${Math.max(h, km > 0 ? 4 : 2)}px;background:${color}"></div><div class="stats-detail__day-name">${name}</div><div class="stats-detail__day-date">${datePerDay[i]}</div></div>`;
+    const max = Math.max(...km, 0.1);
+    barsEl.innerHTML = DAYS.map((name, i) => {
+      const h = Math.round((km[i] / max) * 48);
+      const c = typ[i] === 'running' ? '#00c46a' : typ[i] === 'cycling' ? '#ffb545' : '#3a4147';
+      const a = this.#statsSelectedDay === i ? ' active' : '';
+      return `<div class="stats-detail__day-col${a}" data-day="${i}"><div class="stats-detail__bar" style="height:${Math.max(h, km[i] > 0 ? 4 : 2)}px;background:${c}"></div><div class="stats-detail__day-name">${name}</div><div class="stats-detail__day-date">${dates[i]}</div></div>`;
     }).join('');
-    barsEl.querySelectorAll('.stats-detail__day-col').forEach(col => {
+    barsEl.querySelectorAll('.stats-detail__day-col').forEach(col =>
       col.addEventListener('click', e => {
         e.stopPropagation();
         const day = +col.dataset.day;
         this.#statsSelectedDay = this.#statsSelectedDay === day ? null : day;
         this._renderStats();
-      });
-    });
+      })
+    );
   }
 
   _showGoalCelebration() {
@@ -991,11 +974,11 @@ class App {
     panel?.classList.add('goal-reached');
     setTimeout(() => panel?.classList.remove('goal-reached'), 800);
     document.querySelector('.stats-goal-toast')?.remove();
-    const toast = document.createElement('div');
-    toast.className = 'stats-goal-toast';
-    toast.innerHTML = `<span class="stats-goal-toast__emoji">🏆</span><span class="stats-goal-toast__title">Weekly goal reached!</span><span class="stats-goal-toast__sub">Amazing — you crushed your weekly target 🎉</span>`;
-    document.body.appendChild(toast);
-    setTimeout(() => { toast.style.transition = 'opacity 0.5s ease'; toast.style.opacity = '0'; setTimeout(() => toast.remove(), 500); }, 3500);
+    const t = document.createElement('div');
+    t.className = 'stats-goal-toast';
+    t.innerHTML = `<span class="stats-goal-toast__emoji">🏆</span><span class="stats-goal-toast__title">Weekly goal reached!</span><span class="stats-goal-toast__sub">Amazing — you crushed your weekly target 🎉</span>`;
+    document.body.appendChild(t);
+    setTimeout(() => { t.style.transition = 'opacity 0.5s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 500); }, 3500);
   }
 
   // ─── POI SEARCH ──────────────────────────────────────────────────
@@ -1325,26 +1308,24 @@ class App {
 const app = new App();
 
 // ─── MOBILE SLIDING PANEL ────────────────────────────────────────
-// The drag bar is drawn by sidebar::before in CSS (one bar, no duplicates).
-// Sidebar has overflow-y: auto always — scroll works at every level.
-// Drag only activates when touchstart lands in the top HANDLE_ZONE (56px),
-// so scrolling the content below never interferes with dragging.
 (function initMobilePanel() {
   const sidebar = document.querySelector('.sidebar');
-  const HANDLE_ZONE = 56; // px from top of sidebar
+  const HANDLE_ZONE = 56; // px — only the top strip triggers drag
   let startY = 0, startH = 0, isDragging = false;
 
   const isMobile = () => window.innerWidth <= 768;
   const VH = () => window.innerHeight;
 
   const snapTo = (h, animate = true) => {
-    sidebar.style.transition = animate ? 'height 0.32s cubic-bezier(0.4,0,0.2,1)' : 'none';
+    sidebar.style.transition = animate
+      ? 'height 0.32s cubic-bezier(0.4,0,0.2,1)'
+      : 'none';
     sidebar.style.height = typeof h === 'number' ? h + 'px' : h;
   };
 
-  const collapse = () => snapTo('5.5rem');
-  const toHalf   = () => snapTo('55vh');
-  const toTall   = () => snapTo('80vh');
+  const collapse = () => { snapTo('5.5rem'); sidebar.scrollTop = 0; };
+  const toHalf   = () => { snapTo('55vh');   sidebar.scrollTop = 0; };
+  const toTall   = () => { snapTo('80vh');   sidebar.scrollTop = 0; };
   const toFull   = () => snapTo('100dvh');
 
   if (isMobile()) toHalf();
@@ -1357,15 +1338,22 @@ const app = new App();
     if (!isMobile()) return;
     const touch = e.touches[0];
     const rect  = sidebar.getBoundingClientRect();
-    // Only drag if touch is in the handle zone at the top
-    if (touch.clientY - rect.top > HANDLE_ZONE) return;
+    const touchY = touch.clientY - rect.top;
+
+    // Only start drag if:
+    // 1. Touch is in the top handle zone, AND
+    // 2. Sidebar content is scrolled to the very top
+    //    (so we don't steal scroll events mid-content)
+    if (touchY > HANDLE_ZONE) return;
+    if (sidebar.scrollTop > 4) return; // already scrolled inside — don't drag
+
     isDragging = true;
     startY = touch.clientY;
     startH = sidebar.offsetHeight;
     sidebar.style.transition = 'none';
   }, { passive: true });
 
-  // Listen on document so drag continues even if finger leaves the handle
+  // Track on document so drag doesn't break if finger leaves sidebar
   document.addEventListener('touchmove', e => {
     if (!isDragging || !isMobile()) return;
     const delta = startY - e.touches[0].clientY;
