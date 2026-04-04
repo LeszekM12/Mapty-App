@@ -1247,3 +1247,161 @@ body.night-mode .route-mode-btn { background-color: #1a2a3a; }
     border-left: 3px solid var(--color-brand--2);
     background-color: rgba(0, 196, 106, 0.06);
 }
+
+/* ─── CUSTOM FILTER ADD BUTTON ─── */
+.poi-filter-btn--add {
+    background-color: var(--color-dark--2);
+    border-color: var(--color-brand--2);
+    color: var(--color-brand--2);
+    font-size: 1.6rem;
+    font-weight: 800;
+    padding: 0.4rem 1rem;
+    line-height: 1;
+}
+.poi-filter-btn--add:hover {
+    background-color: rgba(0,196,106,0.15);
+}
+.poi-filter-btn--custom {
+    position: relative;
+}
+.poi-filter-btn--custom::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 99px;
+}
+
+/* ─── CUSTOM FILTER MODAL ─── */
+.custom-filter-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+.custom-filter-modal__box {
+    background: var(--color-dark--1);
+    border-radius: 16px;
+    padding: 2.4rem 2.4rem 2rem;
+    width: 100%;
+    max-width: 36rem;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+}
+.custom-filter-modal__title {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--color-light--2);
+    margin-bottom: 1.6rem;
+    text-align: center;
+}
+.custom-filter-modal__coord {
+    font-size: 1.2rem;
+    color: var(--color-brand--2);
+    background: rgba(0,196,106,0.1);
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    margin-bottom: 1.6rem;
+    text-align: center;
+}
+.custom-filter-modal__coord.no-coord {
+    color: #ffb545;
+    background: rgba(255,181,69,0.1);
+}
+.custom-filter-modal__field {
+    margin-bottom: 1.6rem;
+}
+.custom-filter-modal__label {
+    display: block;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--color-light--1);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.8rem;
+}
+.custom-filter-modal__input {
+    width: 100%;
+    background: var(--color-dark--2);
+    border: 1.5px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    color: var(--color-light--2);
+    font-family: inherit;
+    font-size: 1.4rem;
+    padding: 0.9rem 1.2rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.custom-filter-modal__input:focus {
+    border-color: var(--color-brand--2);
+}
+.custom-filter-modal__emoji-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+}
+.cf-emoji-btn {
+    background: var(--color-dark--2);
+    border: 1.5px solid transparent;
+    border-radius: 8px;
+    font-size: 2rem;
+    width: 3.8rem;
+    height: 3.8rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.15s, background 0.15s;
+}
+.cf-emoji-btn:hover { border-color: var(--color-brand--2); }
+.cf-emoji-btn.active {
+    border-color: var(--color-brand--2);
+    background: rgba(0,196,106,0.15);
+}
+.custom-filter-modal__emoji-custom {
+    margin-top: 0.6rem;
+}
+.custom-filter-modal__actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.4rem;
+}
+.custom-filter-modal__btn {
+    flex: 1;
+    padding: 1.1rem;
+    border-radius: 8px;
+    border: none;
+    font-family: inherit;
+    font-size: 1.4rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.custom-filter-modal__btn--cancel {
+    background: var(--color-dark--2);
+    color: var(--color-light--1);
+}
+.custom-filter-modal__btn--cancel:hover { background: rgba(255,255,255,0.1); }
+.custom-filter-modal__btn--save {
+    background: var(--color-brand--2);
+    color: #fff;
+}
+.custom-filter-modal__btn--save:hover { background: #00a85a; }
+
+/* ─── CUSTOM FILTER MODAL HINT ─── */
+.custom-filter-modal__hint {
+    font-size: 1.2rem;
+    color: var(--color-light--1);
+    background: rgba(255,255,255,0.05);
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    margin-bottom: 1rem;
+    text-align: center;
+    line-height: 1.5;
+}
+.custom-filter-modal__hint strong {
+    color: var(--color-brand--2);
+}

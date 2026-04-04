@@ -140,7 +140,13 @@ class App {
 
   #activitySpeeds = { running: 10, cycling: 20, walking: 5 };
 
-  #activeWorkoutId = null; // currently selected workout (shown on map)
+  #activeWorkoutId = null;
+  #workoutRouteLayer = null;
+
+  // Custom pinned-place filters saved by user
+  #customFilters = JSON.parse(localStorage.getItem('customFilters') || '[]');
+  // Last clicked point on map (used by custom filter picker to bind a place)
+  #pinnedCoord = null;
 
   #goalKm    = +(localStorage.getItem('goalKm')    || 35);
   #goalTime  = +(localStorage.getItem('goalTime')  || 300);
@@ -171,6 +177,7 @@ class App {
     this._initPWAInstall();
     this._initStats();
     this._initIOSBanner();
+    this._initCustomFilters();
 
     // Restore preferences
     if (localStorage.getItem('nightMode') === 'true') {
@@ -609,6 +616,8 @@ class App {
 
   // ─── MAP CLICK ───────────────────────────────────────────────────
   _handleMapClick(mapE) {
+    // Always save clicked coords so custom filter picker can use them
+    this.#pinnedCoord = [mapE.latlng.lat, mapE.latlng.lng];
     if (this.#routeMode && this.#routeStep < 3) this._handleRouteClick(mapE);
     else this._showForm(mapE);
   }
@@ -818,9 +827,6 @@ class App {
       if (workout.routeCoords?.length > 1) this._showWorkoutRoute(workout.routeCoords);
     }
   }
-
-  // Stored polyline for the currently shown workout route
-  #workoutRouteLayer = null;
 
   _showWorkoutRoute(coords) {
     this._clearWorkoutRoute();
@@ -1105,6 +1111,225 @@ class App {
     t.innerHTML = `<span class="stats-goal-toast__emoji">🏆</span><span class="stats-goal-toast__title">Weekly goal reached!</span><span class="stats-goal-toast__sub">Amazing — you crushed it 🎉</span>`;
     document.body.appendChild(t);
     setTimeout(() => { t.style.transition = 'opacity 0.5s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 500); }, 3500);
+  }
+
+  // ─── CUSTOM PINNED FILTERS ───────────────────────────────────────
+  _initCustomFilters() {
+    this._renderCustomFilterBtns();
+  }
+
+  _renderCustomFilterBtns() {
+    const filters = document.getElementById('poiFilters');
+    if (!filters) return;
+
+    // Remove existing custom btns
+    filters.querySelectorAll('.poi-filter-btn--custom').forEach(b => b.remove());
+
+    // + button always first
+    let addBtn = document.getElementById('btnAddCustomFilter');
+    if (!addBtn) {
+      addBtn = document.createElement('button');
+      addBtn.id = 'btnAddCustomFilter';
+      addBtn.className = 'poi-filter-btn poi-filter-btn--add';
+      addBtn.title = 'Add custom place';
+      addBtn.innerHTML = '＋';
+      addBtn.addEventListener('click', e => { e.stopPropagation(); this._openCustomFilterModal(); });
+      filters.prepend(addBtn);
+    }
+
+    // Render custom buttons — newest first (index 0 = newest)
+    this.#customFilters.forEach((cf, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'poi-filter-btn poi-filter-btn--custom';
+      btn.dataset.idx = idx;
+      btn.innerHTML = `${cf.emoji} ${cf.name}`;
+      btn.title = cf.name;
+
+      // Long-press / right-click → delete
+      let pressTimer;
+      const startPress = () => { pressTimer = setTimeout(() => this._deleteCustomFilter(idx), 600); };
+      const cancelPress = () => clearTimeout(pressTimer);
+      btn.addEventListener('touchstart',  startPress,  { passive: true });
+      btn.addEventListener('touchend',    cancelPress, { passive: true });
+      btn.addEventListener('touchcancel', cancelPress, { passive: true });
+      btn.addEventListener('contextmenu', e => { e.preventDefault(); this._deleteCustomFilter(idx); });
+
+      // Click → show pinned place on map with full POI card
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.poi-filter-btn').forEach(b => b.classList.remove('poi-filter-btn--active'));
+        btn.classList.add('poi-filter-btn--active');
+        // Show label in search input (the actual place name, not "undefined")
+        const input = document.getElementById('poiInput');
+        if (input) input.value = cf.address || cf.name;
+        this._searchPOIAtCoords(cf.coords, cf.emoji, cf.name, cf.address || '');
+      });
+
+      // Insert right after the + button
+      addBtn.insertAdjacentElement('afterend', btn);
+    });
+  }
+
+  _openCustomFilterModal() {
+    document.getElementById('customFilterModal')?.remove();
+
+    const pinnedCoord = this.#pinnedCoord;
+
+    const modal = document.createElement('div');
+    modal.id = 'customFilterModal';
+    modal.className = 'custom-filter-modal';
+    modal.innerHTML = `
+      <div class="custom-filter-modal__box">
+        <div class="custom-filter-modal__title">Add custom place</div>
+
+        <div class="custom-filter-modal__hint">
+          👆 To set the location, <strong>click the start point "A" on the map</strong> (not via search).
+        </div>
+
+        <div class="custom-filter-modal__coord ${pinnedCoord ? '' : 'no-coord'}" id="cfCoordLabel">
+          ${pinnedCoord
+      ? `📍 Point selected: ${pinnedCoord[0].toFixed(5)}, ${pinnedCoord[1].toFixed(5)}`
+      : '⚠️ No point selected — tap a spot on the map first'}
+        </div>
+
+        <div class="custom-filter-modal__field">
+          <label class="custom-filter-modal__label">Name</label>
+          <input class="custom-filter-modal__input" id="cfName" type="text"
+                 placeholder="e.g. Home, Office…" maxlength="30"/>
+        </div>
+
+        <div class="custom-filter-modal__field">
+          <label class="custom-filter-modal__label">Emoji</label>
+          <div class="custom-filter-modal__emoji-grid" id="cfEmojiGrid">
+            ${['🏠','🏢','🏫','🏋️','🛒','☕','🍕','🍺','🌳','⛪','🏥','💊','🚉','🅿️','🐶','🎯','🎸','📚','🏊','🚲'].map(em =>
+      `<button class="cf-emoji-btn" data-emoji="${em}">${em}</button>`
+    ).join('')}
+          </div>
+          <div class="custom-filter-modal__emoji-custom">
+            <input class="custom-filter-modal__input" id="cfEmojiInput" type="text"
+                   placeholder="Or type emoji…" maxlength="4"/>
+          </div>
+        </div>
+
+        <div class="custom-filter-modal__actions">
+          <button class="custom-filter-modal__btn custom-filter-modal__btn--cancel" id="cfCancel">Cancel</button>
+          <button class="custom-filter-modal__btn custom-filter-modal__btn--save" id="cfSave">Save</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    let selectedEmoji = '';
+
+    modal.querySelectorAll('.cf-emoji-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        modal.querySelectorAll('.cf-emoji-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedEmoji = btn.dataset.emoji;
+        document.getElementById('cfEmojiInput').value = '';
+      });
+    });
+
+    document.getElementById('cfEmojiInput').addEventListener('input', e => {
+      selectedEmoji = e.target.value.trim();
+      modal.querySelectorAll('.cf-emoji-btn').forEach(b => b.classList.remove('active'));
+    });
+
+    document.getElementById('cfCancel').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+    document.getElementById('cfSave').addEventListener('click', async () => {
+      const name  = document.getElementById('cfName').value.trim();
+      const emoji = selectedEmoji || document.getElementById('cfEmojiInput').value.trim();
+
+      if (!pinnedCoord) {
+        alert('Please tap a spot on the map first to set the location.');
+        return;
+      }
+      if (!name) {
+        alert('Please enter a name for this place.');
+        document.getElementById('cfName').focus();
+        return;
+      }
+      if (!emoji) {
+        alert('Please choose or type an emoji.');
+        return;
+      }
+
+      // Reverse-geocode to get a street address for the search input
+      let address = '';
+      try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${pinnedCoord[0]}&lon=${pinnedCoord[1]}&format=json`, { headers: { 'Accept-Language': 'en' } });
+        const d = await r.json();
+        const a = d.address || {};
+        address = [a.road, a.house_number].filter(Boolean).join(' ')
+          || d.display_name?.split(',')[0]
+          || '';
+      } catch { /* ignore — address stays empty */ }
+
+      // Newest first: unshift instead of push
+      this.#customFilters.unshift({ name, emoji, coords: pinnedCoord, address });
+      localStorage.setItem('customFilters', JSON.stringify(this.#customFilters));
+      this._renderCustomFilterBtns();
+      modal.remove();
+    });
+  }
+
+  _deleteCustomFilter(idx) {
+    if (!confirm(`Remove "${this.#customFilters[idx].name}"?`)) return;
+    // Remove the POI marker for this custom filter if it's currently shown
+    this._clearPOIMarkers();
+    // Also hide results
+    const resultsList = document.getElementById('poiResults');
+    if (resultsList) { resultsList.classList.add('hidden'); resultsList.innerHTML = ''; }
+    const input = document.getElementById('poiInput');
+    if (input) input.value = '';
+    this.#customFilters.splice(idx, 1);
+    localStorage.setItem('customFilters', JSON.stringify(this.#customFilters));
+    this._renderCustomFilterBtns();
+  }
+
+  async _searchPOIAtCoords(coords, emoji, label, address) {
+    const resultsList = document.getElementById('poiResults');
+    resultsList.classList.remove('hidden');
+    this._clearPOIMarkers();
+
+    if (!this.#map) return;
+
+    // Distance from user
+    const distM = this.#userCoords ? this._haversine(this.#userCoords, coords) : null;
+    const distTxt = distM != null
+      ? distM < 1000 ? `${Math.round(distM)} m away` : `${(distM / 1000).toFixed(1)} km away`
+      : '';
+
+    const displayAddr = address || '';
+
+    // Show marker at pinned coords
+    const marker = L.marker(coords, {
+      icon: L.divIcon({
+        className: '',
+        html: `<div style="background:#2d3439;border:2px solid #00c46a;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 2px 8px rgba(0,0,0,0.4)">${emoji}</div>`,
+        iconSize: [36, 36], iconAnchor: [18, 18],
+      }),
+    }).addTo(this.#map)
+      .bindPopup(`<b>${emoji} ${label}</b>${displayAddr ? `<br>${displayAddr}` : ''}${distTxt ? `<br><small>${distTxt}</small>` : ''}<br><button onclick="window._poiSetA(${coords[0]},${coords[1]})" style="margin-top:6px;padding:4px 10px;background:#00c46a;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px;font-weight:700">Set as route A →</button>`)
+      .openPopup();
+    this.#poiMarkers.push(marker);
+    this.#map.setView(coords, 16, { animate: true });
+
+    // Result card identical to regular POI results
+    const li = document.createElement('li');
+    li.className = 'poi-result-item';
+    li.innerHTML = `
+      <span class="poi-result-item__name">${emoji} ${label}</span>
+      ${displayAddr ? `<span class="poi-result-item__addr">${displayAddr}</span>` : ''}
+      ${distTxt ? `<span class="poi-result-item__dist">📍 ${distTxt}</span>` : ''}
+    `;
+    li.addEventListener('click', () => {
+      this.#map.setView(coords, 16, { animate: true });
+      marker.openPopup();
+    });
+    resultsList.innerHTML = '';
+    resultsList.appendChild(li);
   }
 
   // ─── POI SEARCH ──────────────────────────────────────────────────
