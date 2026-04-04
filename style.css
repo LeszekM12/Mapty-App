@@ -1405,3 +1405,84 @@ body.night-mode .route-mode-btn { background-color: #1a2a3a; }
 .custom-filter-modal__hint strong {
     color: var(--color-brand--2);
 }
+
+/* ─── WORKOUT MODAL (mobile map-click form) ─── */
+.workout-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+.workout-modal__box {
+    background: var(--color-dark--1);
+    border-radius: 16px;
+    padding: 2.4rem 2.4rem 2rem;
+    width: 100%;
+    max-width: 36rem;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+}
+.workout-modal__title {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--color-light--2);
+    margin-bottom: 1.8rem;
+    text-align: center;
+}
+.workout-modal__row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.2rem;
+}
+.workout-modal__row.hidden { display: none !important; }
+.workout-modal__label {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--color-light--1);
+    min-width: 7rem;
+}
+.workout-modal__input {
+    flex: 1;
+    background: var(--color-dark--2);
+    border: 1.5px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    color: var(--color-light--2);
+    font-family: inherit;
+    font-size: 1.4rem;
+    padding: 0.85rem 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+}
+.workout-modal__input:focus { border-color: var(--color-brand--2); }
+.workout-modal__select { cursor: pointer; }
+.workout-modal__actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.6rem;
+}
+.workout-modal__btn {
+    flex: 1;
+    padding: 1.1rem;
+    border-radius: 8px;
+    border: none;
+    font-family: inherit;
+    font-size: 1.4rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.workout-modal__btn--cancel {
+    background: var(--color-dark--2);
+    color: var(--color-light--1);
+}
+.workout-modal__btn--cancel:hover { background: rgba(255,255,255,0.1); }
+.workout-modal__btn--save {
+    background: var(--color-brand--2);
+    color: #fff;
+}
+.workout-modal__btn--save:hover { background: #00a85a; }
