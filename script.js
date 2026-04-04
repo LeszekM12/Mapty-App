@@ -624,16 +624,115 @@ class App {
 
   _showForm(mapE) {
     this.#mapEvent = mapE;
-    form.classList.remove('hidden');
-    inputDistance.focus();
 
     if (window.innerWidth <= 768) {
-      const sidebar = document.querySelector('.sidebar');
-      sidebar.style.transition = 'height 0.32s cubic-bezier(0.4,0,0.2,1)';
-      sidebar.style.height = '100dvh';
-      sidebar.classList.add('is-scrollable');
-      setTimeout(() => form.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 350);
+      // On mobile: show form as a centred overlay modal (like the custom filter modal)
+      this._showFormModal();
+    } else {
+      form.classList.remove('hidden');
+      inputDistance.focus();
     }
+  }
+
+  _showFormModal() {
+    document.getElementById('workoutModal')?.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'workoutModal';
+    modal.className = 'workout-modal';
+    modal.innerHTML = `
+      <div class="workout-modal__box">
+        <div class="workout-modal__title">Add Workout</div>
+        <form class="workout-modal__form" id="workoutModalForm">
+          <div class="workout-modal__row">
+            <label class="workout-modal__label">Type</label>
+            <select class="workout-modal__input workout-modal__select" id="wm-type">
+              <option value="running">Running</option>
+              <option value="cycling">Cycling</option>
+            </select>
+          </div>
+          <div class="workout-modal__row">
+            <label class="workout-modal__label">Distance</label>
+            <input class="workout-modal__input" id="wm-distance" type="number" placeholder="km" min="0"/>
+          </div>
+          <div class="workout-modal__row">
+            <label class="workout-modal__label">Duration</label>
+            <input class="workout-modal__input" id="wm-duration" type="number" placeholder="min" min="0"/>
+          </div>
+          <div class="workout-modal__row" id="wm-cadence-row">
+            <label class="workout-modal__label">Cadence</label>
+            <input class="workout-modal__input" id="wm-cadence" type="number" placeholder="step/min" min="0"/>
+          </div>
+          <div class="workout-modal__row hidden" id="wm-elev-row">
+            <label class="workout-modal__label">Elev Gain</label>
+            <input class="workout-modal__input" id="wm-elevation" type="number" placeholder="meters"/>
+          </div>
+          <div class="workout-modal__actions">
+            <button type="button" class="workout-modal__btn workout-modal__btn--cancel" id="wmCancel">Cancel</button>
+            <button type="submit" class="workout-modal__btn workout-modal__btn--save">✓ Add Workout</button>
+          </div>
+        </form>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const wmType    = document.getElementById('wm-type');
+    const wmDist    = document.getElementById('wm-distance');
+    const wmDur     = document.getElementById('wm-duration');
+    const wmCad     = document.getElementById('wm-cadence');
+    const wmElev    = document.getElementById('wm-elevation');
+    const wmCadRow  = document.getElementById('wm-cadence-row');
+    const wmElevRow = document.getElementById('wm-elev-row');
+
+    wmType.addEventListener('change', () => {
+      if (wmType.value === 'cycling') {
+        wmCadRow.classList.add('hidden');
+        wmElevRow.classList.remove('hidden');
+      } else {
+        wmCadRow.classList.remove('hidden');
+        wmElevRow.classList.add('hidden');
+      }
+    });
+
+    document.getElementById('wmCancel').addEventListener('click', () => modal.remove());
+
+    document.getElementById('workoutModalForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const type     = wmType.value;
+      const distance = +wmDist.value;
+      const duration = +wmDur.value;
+      const { lat, lng } = this.#mapEvent.latlng;
+
+      const validInputs = (...inputs) => inputs.every(inp => Number.isFinite(inp));
+      const allPositive = (...inputs) => inputs.every(inp => inp > 0);
+
+      let workout;
+      if (type === 'running') {
+        const cadence = +wmCad.value;
+        if (!validInputs(distance, duration, cadence) || !allPositive(distance, duration, cadence))
+          return alert('Inputs have to be positive numbers!');
+        workout = new Running([lat, lng], distance, duration, cadence);
+      }
+      if (type === 'cycling') {
+        const elevation = +wmElev.value;
+        if (!validInputs(distance, duration, elevation) || !allPositive(distance, duration))
+          return alert('Inputs have to be positive numbers!');
+        workout = new Cycling([lat, lng], distance, duration, elevation);
+      }
+
+      modal.remove();
+      this.#workouts.push(workout);
+      if (this.#routeCoords && this.#routeCoords.length > 1)
+        workout.routeCoords = [...this.#routeCoords];
+      this.#activeWorkoutId = '__pending__';
+      this._renderWorkoutMarker(workout);
+      this._renderWorkout(workout);
+      this._setLocalStorage();
+      this._renderStats(true);
+      this._renderStreak();
+    });
+
+    setTimeout(() => wmDist.focus(), 100);
   }
 
   _hideForm() {
@@ -1158,9 +1257,9 @@ class App {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.poi-filter-btn').forEach(b => b.classList.remove('poi-filter-btn--active'));
         btn.classList.add('poi-filter-btn--active');
-        // Show label in search input (the actual place name, not "undefined")
         const input = document.getElementById('poiInput');
-        if (input) input.value = cf.address || cf.name;
+        // Use address if it exists and is not empty, otherwise use the custom name
+        if (input) input.value = (cf.address && cf.address.trim()) ? cf.address : cf.name;
         this._searchPOIAtCoords(cf.coords, cf.emoji, cf.name, cf.address || '');
       });
 
