@@ -1513,3 +1513,53 @@ body.night-mode .route-mode-btn { background-color: #1a2a3a; }
 /* Walking type colour */
 .workout--walking { border-left-color: #5badea; }
 
+
+/* ─── ROUTE THUMBNAIL — absolute, doesn't affect grid layout ─── */
+
+/* Remove previous thumbnail styles that were added */
+.workout__header,
+.workout__thumb,
+.workout__route-thumb { display: none !important; }
+
+.workout {
+    position: relative; /* needed for absolute thumbnail */
+}
+
+/* Container sits absolute in top-right, no impact on grid */
+.workout__thumb-container {
+    position: absolute;
+    top: 1rem;
+    right: 2.25rem;
+    width: 6rem;
+    height: 6rem;
+    border-radius: 6px;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 1;
+}
+.workout__thumb-wrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+.workout__thumb-map {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: 6px;
+    opacity: 0.85;
+}
+.workout__thumb-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* Walking — NO border colour by default (same as no class) */
+/* It gets the active green from workout--active like others */
+.workout--walking {
+    border-left: 5px solid var(--color-light--1);
+}
+
