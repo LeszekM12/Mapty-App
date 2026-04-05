@@ -43,6 +43,17 @@ class Cycling extends Workout {
   calcSpeed() { this.speed = this.distance / (this.duration / 60); return this.speed; }
 }
 
+class Walking extends Workout {
+  type = 'walking';
+  constructor(coords, distance, duration, cadence) {
+    super(coords, distance, duration);
+    this.cadence = cadence;
+    this.calcPace();
+    this._setDescription();
+  }
+  calcPace() { this.pace = this.duration / this.distance; return this.pace; }
+}
+
 ///////////////////////////////////////
 // DOM REFS
 
@@ -649,6 +660,7 @@ class App {
             <select class="workout-modal__input workout-modal__select" id="wm-type">
               <option value="running">Running</option>
               <option value="cycling">Cycling</option>
+              <option value="walking">Walking</option>
             </select>
           </div>
           <div class="workout-modal__row">
@@ -689,6 +701,7 @@ class App {
         wmCadRow.classList.add('hidden');
         wmElevRow.classList.remove('hidden');
       } else {
+        // running + walking both use cadence
         wmCadRow.classList.remove('hidden');
         wmElevRow.classList.add('hidden');
       }
@@ -718,6 +731,12 @@ class App {
         if (!validInputs(distance, duration, elevation) || !allPositive(distance, duration))
           return alert('Inputs have to be positive numbers!');
         workout = new Cycling([lat, lng], distance, duration, elevation);
+      }
+      if (type === 'walking') {
+        const cadence = +wmCad.value;
+        if (!validInputs(distance, duration, cadence) || !allPositive(distance, duration, cadence))
+          return alert('Inputs have to be positive numbers!');
+        workout = new Walking([lat, lng], distance, duration, cadence);
       }
 
       modal.remove();
@@ -781,6 +800,13 @@ class App {
       workout = new Cycling([lat, lng], distance, duration, elevation);
     }
 
+    if (type === 'walking') {
+      const cadence = +inputCadence.value;
+      if (!validInputs(distance, duration, cadence) || !allPositive(distance, duration, cadence))
+        return alert('Inputs have to be positive numbers!');
+      workout = new Walking([lat, lng], distance, duration, cadence);
+    }
+
     this.#workouts.push(workout);
     if (this.#routeCoords && this.#routeCoords.length > 1) {
       workout.routeCoords = [...this.#routeCoords];
@@ -817,10 +843,11 @@ class App {
   }
 
   _renderWorkoutMarker(workout) {
+    const icon = workout.type === 'running' ? '🏃‍♂️' : workout.type === 'cycling' ? '🚴‍♀️' : '🚶';
     const marker = L.marker(workout.coords)
       .addTo(this.#map)
       .bindPopup(L.popup({ maxWidth: 250, minWidth: 100, autoClose: false, closeOnClick: false, className: `${workout.type}-popup` }))
-      .setPopupContent(`${workout.type === 'running' ? '🏃‍♂️' : '🚴‍♀️'} ${workout.description}`);
+      .setPopupContent(`${icon} ${workout.description}`);
     this.#markers.set(workout.id, marker);
 
     // If this is the newly added workout (called from _newWorkout, not _loadMap):
@@ -843,12 +870,44 @@ class App {
     }
   }
 
+  // Build an inline SVG miniature of a route polyline
+  _buildRouteThumbnail(routeCoords) {
+    if (!routeCoords || routeCoords.length < 2) return '';
+    const W = 72, H = 72, PAD = 6;
+
+    const lats = routeCoords.map(c => c[0]);
+    const lngs = routeCoords.map(c => c[1]);
+    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+    const ranLat = maxLat - minLat || 0.0001;
+    const ranLng = maxLng - minLng || 0.0001;
+
+    const toX = lng => PAD + ((lng - minLng) / ranLng) * (W - 2 * PAD);
+    const toY = lat => (H - PAD) - ((lat - minLat) / ranLat) * (H - 2 * PAD);
+
+    const pts = routeCoords.map(c => `${toX(c[1]).toFixed(1)},${toY(c[0]).toFixed(1)}`).join(' ');
+
+    return `<svg class="workout__route-thumb" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="${W}" height="${H}" rx="6" fill="#3a4147"/>
+      <polyline points="${pts}" fill="none" stroke="#00c46a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+  }
+
   _renderWorkout(workout) {
+    const icon = workout.type === 'running' ? '🏃‍♂️'
+      : workout.type === 'cycling' ? '🚴‍♀️'
+        : '🚶';
+
+    const thumb = this._buildRouteThumbnail(workout.routeCoords);
+
     let html = `
       <li class="workout workout--${workout.type}" data-id="${workout.id}">
-        <h2 class="workout__title">${workout.description}</h2>
+        <div class="workout__header">
+          <h2 class="workout__title">${workout.description}</h2>
+          ${thumb ? `<div class="workout__thumb">${thumb}</div>` : ''}
+        </div>
         <div class="workout__details">
-          <span class="workout__icon">${workout.type === 'running' ? '🏃‍♂️' : '🚴‍♀️'}</span>
+          <span class="workout__icon">${icon}</span>
           <span class="workout__value">${workout.distance}</span>
           <span class="workout__unit">km</span>
         </div>
@@ -859,7 +918,7 @@ class App {
         </div>
     `;
 
-    if (workout.type === 'running')
+    if (workout.type === 'running' || workout.type === 'walking')
       html += `
         <div class="workout__details">
           <span class="workout__icon">⚡️</span>
@@ -1281,7 +1340,7 @@ class App {
         <div class="custom-filter-modal__title">Add custom place</div>
 
         <div class="custom-filter-modal__hint">
-          👆 To set the location, <strong>click the start point "A" on the map</strong> (not via search).
+          👆 To set the location, <strong>tap directly on the map</strong> (not via search).
         </div>
 
         <div class="custom-filter-modal__coord ${pinnedCoord ? '' : 'no-coord'}" id="cfCoordLabel">
