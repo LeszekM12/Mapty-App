@@ -870,27 +870,56 @@ class App {
     }
   }
 
-  // Build an inline SVG miniature of a route polyline
+  // Build route thumbnail using OpenStreetMap static tile + SVG overlay in an absolute-positioned div
   _buildRouteThumbnail(routeCoords) {
     if (!routeCoords || routeCoords.length < 2) return '';
-    const W = 72, H = 72, PAD = 6;
 
     const lats = routeCoords.map(c => c[0]);
     const lngs = routeCoords.map(c => c[1]);
     const minLat = Math.min(...lats), maxLat = Math.max(...lats);
     const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
-    const ranLat = maxLat - minLat || 0.0001;
-    const ranLng = maxLng - minLng || 0.0001;
+    const cLat   = (minLat + maxLat) / 2;
+    const cLng   = (minLng + maxLng) / 2;
 
+    // Pick a zoom level so the route fits in 80x80px tile
+    const latSpan = maxLat - minLat || 0.002;
+    const lngSpan = maxLng - minLng || 0.002;
+    const span = Math.max(latSpan, lngSpan);
+    let zoom = 15;
+    if (span > 0.05) zoom = 13;
+    else if (span > 0.02) zoom = 14;
+    else if (span > 0.008) zoom = 15;
+    else zoom = 16;
+
+    // OSM tile for the centre point
+    const tileUrl = `https://tile.openstreetmap.org/${zoom}/${this._lngToTileX(cLng, zoom)}/${this._latToTileY(cLat, zoom)}.png`;
+
+    // Project routeCoords onto the 80×80 thumbnail
+    const W = 80, H = 80, PAD = 4;
+    const ranLat = maxLat - minLat || 0.001;
+    const ranLng = maxLng - minLng || 0.001;
     const toX = lng => PAD + ((lng - minLng) / ranLng) * (W - 2 * PAD);
     const toY = lat => (H - PAD) - ((lat - minLat) / ranLat) * (H - 2 * PAD);
+    const pts = routeCoords
+      .filter((_, i) => i % Math.max(1, Math.floor(routeCoords.length / 60)) === 0)
+      .map(c => `${toX(c[1]).toFixed(1)},${toY(c[0]).toFixed(1)}`).join(' ');
 
-    const pts = routeCoords.map(c => `${toX(c[1]).toFixed(1)},${toY(c[0]).toFixed(1)}`).join(' ');
+    return `<div class="workout__thumb-wrap">
+      <img class="workout__thumb-map" src="${tileUrl}" crossorigin="anonymous"
+           onerror="this.style.display='none'" alt=""/>
+      <svg class="workout__thumb-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+        <polyline points="${pts}" fill="none" stroke="#00c46a" stroke-width="3"
+                  stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+      </svg>
+    </div>`;
+  }
 
-    return `<svg class="workout__route-thumb" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
-      <rect width="${W}" height="${H}" rx="6" fill="#3a4147"/>
-      <polyline points="${pts}" fill="none" stroke="#00c46a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>`;
+  _lngToTileX(lng, zoom) {
+    return Math.floor((lng + 180) / 360 * Math.pow(2, zoom));
+  }
+  _latToTileY(lat, zoom) {
+    const r = Math.PI / 180;
+    return Math.floor((1 - Math.log(Math.tan(lat * r) + 1 / Math.cos(lat * r)) / Math.PI) / 2 * Math.pow(2, zoom));
   }
 
   _renderWorkout(workout) {
@@ -902,10 +931,8 @@ class App {
 
     let html = `
       <li class="workout workout--${workout.type}" data-id="${workout.id}">
-        <div class="workout__header">
-          <h2 class="workout__title">${workout.description}</h2>
-          ${thumb ? `<div class="workout__thumb">${thumb}</div>` : ''}
-        </div>
+        <h2 class="workout__title">${workout.description}</h2>
+        ${thumb ? `<div class="workout__thumb-container">${thumb}</div>` : ''}
         <div class="workout__details">
           <span class="workout__icon">${icon}</span>
           <span class="workout__value">${workout.distance}</span>
