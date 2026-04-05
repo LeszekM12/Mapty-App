@@ -1486,3 +1486,30 @@ body.night-mode .route-mode-btn { background-color: #1a2a3a; }
     color: #fff;
 }
 .workout-modal__btn--save:hover { background: #00a85a; }
+
+/* ─── WORKOUT HEADER WITH ROUTE THUMBNAIL ─── */
+.workout__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    grid-column: 1 / -1;
+    margin-bottom: 0.4rem;
+}
+.workout__header .workout__title {
+    margin-bottom: 0;
+    flex: 1;
+}
+.workout__thumb {
+    flex-shrink: 0;
+}
+.workout__route-thumb {
+    width: 6.4rem;
+    height: 6.4rem;
+    border-radius: 6px;
+    display: block;
+}
+
+/* Walking type colour */
+.workout--walking { border-left-color: #5badea; }
+
