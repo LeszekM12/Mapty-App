@@ -144,6 +144,7 @@ class App {
   #deferredInstallPrompt = null;
 
   #markers = new Map();
+  #clusterGroup = null;  // Leaflet.markercluster group for workout markers
   #poiMarkers = [];
   #userCoords = null;
   #autocompleteTimer = null;
@@ -228,6 +229,21 @@ class App {
     this.#tileLayer = L.tileLayer(TILES[tileKey], { attribution: TILE_ATTR[tileKey] }).addTo(this.#map);
 
     this.#map.on('click', this._handleMapClick.bind(this));
+
+    // Create marker cluster group for workout markers
+    this.#clusterGroup = L.markerClusterGroup({
+      maxClusterRadius: 60,
+      iconCreateFunction: cluster => {
+        const count = cluster.getChildCount();
+        return L.divIcon({
+          html: `<div class="workout-cluster"><span>${count}</span></div>`,
+          className: '',
+          iconSize: [40, 40],
+          iconAnchor: [20, 20],
+        });
+      },
+    });
+    this.#map.addLayer(this.#clusterGroup);
     this.#workouts.forEach(work => this._renderWorkoutMarker(work));
 
     this.#map.on('mousedown touchstart', () => {
@@ -847,20 +863,16 @@ class App {
     const popupClass = workout.type === 'running' ? 'running-popup'
       : workout.type === 'cycling' ? 'cycling-popup'
         : 'walking-popup';
+
+    // Add to cluster group (or directly to map if cluster not ready yet)
+    const target = this.#clusterGroup || this.#map;
     const marker = L.marker(workout.coords)
-      .addTo(this.#map)
       .bindPopup(L.popup({ maxWidth: 250, minWidth: 100, autoClose: false, closeOnClick: false, className: popupClass }))
       .setPopupContent(`${icon} ${workout.description}`);
+    target.addLayer(marker);
     this.#markers.set(workout.id, marker);
 
-    // If this is the newly added workout (called from _newWorkout, not _loadMap):
-    // show it immediately and make it the active one.
-    // If called from _loadMap on page load, hide all markers by default —
-    // user clicks a workout in the list to reveal its marker.
-    // We distinguish by checking whether _newWorkout is the caller:
-    // _newWorkout sets #activeWorkoutId to '__pending__' before calling us.
     if (this.#activeWorkoutId === '__pending__') {
-      // Hide all previously visible markers
       this.#markers.forEach((m, id) => {
         if (id !== workout.id) this._hideMarker(m);
       });
@@ -868,7 +880,6 @@ class App {
       marker.openPopup();
       this.#activeWorkoutId = workout.id;
     } else {
-      // Loading from storage — start hidden
       this._hideMarker(marker);
     }
   }
@@ -1032,7 +1043,16 @@ class App {
 
   _deleteWorkout(id) {
     const marker = this.#markers.get(id);
-    if (marker) { this.#map.removeLayer(marker); this.#markers.delete(id); }
+    if (marker) {
+      // Remove from cluster group or map
+      if (this.#clusterGroup) this.#clusterGroup.removeLayer(marker);
+      else this.#map.removeLayer(marker);
+      this.#markers.delete(id);
+    }
+    if (this.#activeWorkoutId === id) {
+      this.#activeWorkoutId = null;
+      this._clearWorkoutRoute();
+    }
     this.#workouts = this.#workouts.filter(w => w.id !== id);
     const el = document.querySelector(`.workout[data-id="${id}"]`);
     if (el) {
@@ -1370,7 +1390,7 @@ class App {
         <div class="custom-filter-modal__title">Add custom place</div>
 
         <div class="custom-filter-modal__hint">
-          👆 To set the location, <strong>tap directly on the map</strong> (not via search).
+          👆 To set the location, <strong>click the start point "A" on the map</strong> (not via search).
         </div>
 
         <div class="custom-filter-modal__coord ${pinnedCoord ? '' : 'no-coord'}" id="cfCoordLabel">
