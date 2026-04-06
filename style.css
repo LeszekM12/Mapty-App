@@ -1250,6 +1250,30 @@ body.night-mode .route-mode-btn { background-color: #1a2a3a; }
     border-left: 3px solid var(--color-brand--2);
     background-color: rgba(0, 196, 106, 0.06);
 }
+/* Walking active — blue border + blue tint */
+.workout--walking.workout--active {
+    border-left: 3px solid #5badea;
+    background-color: rgba(91, 173, 234, 0.06);
+}
+
+/* ─── WORKOUT CLUSTER MARKER ─── */
+.workout-cluster {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--color-dark--1);
+    border: 3px solid var(--color-brand--2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+.workout-cluster span {
+    color: var(--color-light--2);
+    font-size: 1.3rem;
+    font-weight: 800;
+    font-family: 'Manrope', sans-serif;
+}
 
 /* ─── CUSTOM FILTER ADD BUTTON ─── */
 .poi-filter-btn--add {
