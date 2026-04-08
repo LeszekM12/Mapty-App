@@ -1589,29 +1589,169 @@ body.night-mode .route-mode-btn { background-color: #1a2a3a; }
 .workout--walking {
     border-left: 5px solid #5badea;
 }
-/* ─── CLUSTER TOGGLE ─── */
-.cluster-toggle {
-    width: 3.6rem; height: 2rem;
-    background: var(--color-dark--1); border: 2px solid var(--color-light--1);
-    border-radius: 99px; position: relative; cursor: pointer;
-    transition: background 0.2s, border-color 0.2s; flex-shrink: 0;
+/* ===========================
+   SKELETON LOADER
+=========================== */
+.map-skeleton {
+    position: absolute;
+    inset: 0;
+    z-index: 500;
+    background: #3a4147;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
 }
-.cluster-toggle.active { background: var(--color-brand--2); border-color: var(--color-brand--2); }
-.cluster-toggle__knob {
-    position: absolute; top: 50%; left: 0.2rem; transform: translateY(-50%);
-    width: 1.2rem; height: 1.2rem; background: var(--color-light--1);
-    border-radius: 50%; transition: left 0.2s, background 0.2s;
-}
-.cluster-toggle.active .cluster-toggle__knob { left: 1.9rem; background: #fff; }
+.map-skeleton.hidden { display: none; }
 
-/* ─── WORKOUT CLUSTER MARKER ─── */
-.workout-cluster {
-    width: 40px; height: 40px; border-radius: 50%;
-    background: var(--color-dark--1); border: 3px solid var(--color-brand--2);
-    display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+.map-skeleton__shimmer {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+            90deg,
+            transparent 0%,
+            rgba(255,255,255,0.06) 50%,
+            transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s infinite;
 }
-.workout-cluster span {
-    color: var(--color-light--2); font-size: 1.3rem; font-weight: 800;
+@keyframes shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position:  200% 0; }
+}
+
+.map-skeleton__msg {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.4rem;
+    padding: 2.4rem 3rem;
+    background: rgba(30,34,38,0.92);
+    border-radius: 14px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    pointer-events: all;
+}
+.map-skeleton__msg.hidden { display: none; }
+
+.map-skeleton__text {
+    color: #ececec;
+    font-size: 1.5rem;
+    font-weight: 600;
     font-family: 'Manrope', sans-serif;
+    text-align: center;
+}
+.map-skeleton__btn {
+    background: #00c46a;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.9rem 2.2rem;
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.map-skeleton__btn:hover { background: #00a85a; }
+
+.map--loading { visibility: hidden; }
+.map--hidden  { display: none !important; }
+
+/* ===========================
+   OFFLINE OVERLAY
+=========================== */
+.offline-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 600;
+    background: rgba(30,34,38,0.96);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.offline-overlay.hidden { display: none; }
+
+.offline-overlay__box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.2rem;
+    padding: 3.2rem 3.6rem;
+    background: #2d3439;
+    border-radius: 16px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    text-align: center;
+    max-width: 32rem;
+}
+.offline-overlay__icon svg {
+    width: 5.6rem;
+    height: 5.6rem;
+    stroke: #aaa;
+    margin-bottom: 0.4rem;
+}
+.offline-overlay__title {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #ececec;
+    font-family: 'Manrope', sans-serif;
+}
+.offline-overlay__sub {
+    font-size: 1.35rem;
+    color: #aaa;
+    font-family: 'Manrope', sans-serif;
+    line-height: 1.6;
+}
+.offline-overlay__btn {
+    background: #00c46a;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 1rem 2.4rem;
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 0.4rem;
+    transition: background 0.2s;
+}
+.offline-overlay__btn:hover { background: #00a85a; }
+
+/* shake animation for "still offline" feedback */
+@keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20%,60%  { transform: translateX(-8px); }
+    40%,80%  { transform: translateX(8px); }
+}
+.offline-overlay__box.shake { animation: shake 0.45s ease; }
+
+/* ===========================
+   OFFLINE BADGE
+=========================== */
+.offline-badge {
+    position: fixed;
+    top: 1.2rem;
+    right: 1.2rem;
+    z-index: 10000;
+    background: #2d3439;
+    border: 1.5px solid #aaa;
+    border-radius: 99px;
+    padding: 0.5rem 1.1rem 0.5rem 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #aaa;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.offline-badge.hidden { display: none; }
+.offline-badge svg {
+    width: 1.6rem;
+    height: 1.6rem;
+    stroke: #aaa;
+    flex-shrink: 0;
 }

@@ -75,7 +75,7 @@ const routeTime = document.getElementById('routeTime');
 const routeLoading = document.getElementById('routeLoading');
 const btnTrack = document.getElementById('btnTrack');
 
-// Map tile configs
+// ─── MAP TILE CONFIGS ────────────────────────────────────────────
 const TILES = {
   day:   'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
   night: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
@@ -84,6 +84,176 @@ const TILE_ATTR = {
   day:   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   night: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
 };
+
+/* ===========================
+   1. GLOBAL STATE
+=========================== */
+const NetState = {
+  isOffline:    false,   // true = offline overlay shown
+  mapReady:     false,   // true = Leaflet map fully loaded
+  retryCount:   0,
+  timeoutId:    null,
+};
+
+/* ===========================
+   2. ONLINE / OFFLINE DETECTOR
+=========================== */
+function initOnlineDetector() {
+  const update = () => {
+    if (!navigator.onLine) {
+      enterOfflineMode('auto');
+    } else {
+      exitOfflineMode();
+    }
+  };
+  window.addEventListener('offline', update);
+  window.addEventListener('online',  update);
+  // Check immediately
+  if (!navigator.onLine) enterOfflineMode('auto');
+}
+
+/* ===========================
+   3. SKELETON LOADER
+=========================== */
+function showSkeleton() {
+  document.getElementById('mapSkeleton')?.classList.remove('hidden');
+  document.getElementById('map')?.classList.add('map--loading');
+}
+
+function hideSkeleton() {
+  document.getElementById('mapSkeleton')?.classList.add('hidden');
+  document.getElementById('map')?.classList.remove('map--loading');
+  clearMapTimeout();
+}
+
+/* ===========================
+   4. MAP INITIALIZATION
+=========================== */
+// Called by App._loadMap when Leaflet fires its first 'load' / tile event
+function onMapReady() {
+  NetState.mapReady = true;
+  NetState.retryCount = 0;
+  hideSkeleton();
+}
+
+/* ===========================
+   5. MAP TIMEOUT HANDLER
+=========================== */
+const MAP_TIMEOUT_MS = 10_000;
+
+function startMapTimeout() {
+  clearMapTimeout();
+  NetState.timeoutId = setTimeout(() => {
+    if (NetState.mapReady) return;            // loaded in time — nothing to do
+    // Show timeout message inside skeleton
+    const msg = document.getElementById('skeletonMsg');
+    msg?.classList.remove('hidden');
+  }, MAP_TIMEOUT_MS);
+}
+
+function clearMapTimeout() {
+  clearTimeout(NetState.timeoutId);
+  NetState.timeoutId = null;
+  document.getElementById('skeletonMsg')?.classList.add('hidden');
+}
+
+/* ===========================
+   6. RETRY LOGIC
+=========================== */
+function initRetryBtn() {
+  document.getElementById('btnRetry')?.addEventListener('click', async () => {
+    NetState.retryCount++;
+    clearMapTimeout();
+    // Hide timeout message, show spinner again
+    document.getElementById('skeletonMsg')?.classList.add('hidden');
+
+    // Re-request geolocation → re-init map
+    if (!navigator.geolocation) { offerOffline(); return; }
+
+    showSkeleton();
+    startMapTimeout();
+
+    try {
+      const pos = await new Promise((res, rej) =>
+        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000 })
+      );
+      // Destroy old map if any
+      if (window._maptyApp?._destroyMap) window._maptyApp._destroyMap();
+      window._maptyApp?._loadMap(pos);
+    } catch {
+      if (NetState.retryCount >= 2) offerOffline();
+      else {
+        // Show message again for another retry
+        document.getElementById('skeletonMsg')?.classList.remove('hidden');
+      }
+    }
+  });
+}
+
+function offerOffline() {
+  const yes = confirm('Could not connect to the map.\nSwitch to offline mode?');
+  if (yes) enterOfflineMode('manual');
+  else {
+    // Stay in skeleton — user can retry again
+    document.getElementById('skeletonMsg')?.classList.remove('hidden');
+  }
+}
+
+/* ===========================
+   7. OFFLINE MODE
+=========================== */
+function enterOfflineMode(reason) {
+  if (NetState.isOffline) return;
+  NetState.isOffline = true;
+  hideSkeleton();
+  document.getElementById('offlineOverlay')?.classList.remove('hidden');
+  document.getElementById('offlineBadge')?.classList.remove('hidden');
+  document.getElementById('map')?.classList.add('map--hidden');
+}
+
+function exitOfflineMode() {
+  if (!NetState.isOffline) return;
+  NetState.isOffline = false;
+  document.getElementById('offlineOverlay')?.classList.add('hidden');
+  document.getElementById('offlineBadge')?.classList.add('hidden');
+  document.getElementById('map')?.classList.remove('map--hidden');
+  // If map was never loaded, start loading now
+  if (!NetState.mapReady) {
+    showSkeleton();
+    startMapTimeout();
+    window._maptyApp?._getPosition();
+  }
+}
+
+/* ===========================
+   8. EXIT OFFLINE MODE
+=========================== */
+function initTryAgainBtn() {
+  document.getElementById('btnTryAgain')?.addEventListener('click', () => {
+    if (navigator.onLine) {
+      exitOfflineMode();
+    } else {
+      // Shake the overlay gently — still no internet
+      const box = document.querySelector('.offline-overlay__box');
+      box?.classList.add('shake');
+      setTimeout(() => box?.classList.remove('shake'), 500);
+    }
+  });
+}
+
+/* ===========================
+   9. APP STARTUP FLOW
+=========================== */
+function startApp() {
+  initOnlineDetector();
+  initRetryBtn();
+  initTryAgainBtn();
+
+  // Only attempt to load map if online
+  if (!navigator.onLine) return; // enterOfflineMode already called by initOnlineDetector
+  showSkeleton();
+  startMapTimeout();
+}
 
 // ─── MAIN APP CLASS ──────────────────────────────────────────────
 class App {
@@ -145,7 +315,6 @@ class App {
 
   #markers = new Map();
   #clusterGroup = null;  // Leaflet.markercluster group for workout markers
-  #clusterEnabled = localStorage.getItem('clusterEnabled') === 'true'; // off by default
   #poiMarkers = [];
   #userCoords = null;
   #autocompleteTimer = null;
@@ -172,6 +341,8 @@ class App {
   constructor() {
     this._getPosition();
     this._getLocalStorage();
+    startApp();
+    window._maptyApp = this; // expose for retry logic
 
     form.addEventListener('submit', this._newWorkout.bind(this));
     inputType.addEventListener('change', this._toggleElevationField);
@@ -205,6 +376,17 @@ class App {
   }
 
   // ─── GEOLOCATION ─────────────────────────────────────────────────
+  _destroyMap() {
+    if (this.#map) {
+      this.#map.remove();
+      this.#map = null;
+      this.#tileLayer = null;
+      this.#clusterGroup = null;
+      this.#markers.clear();
+      NetState.mapReady = false;
+    }
+  }
+
   _getPosition() {
     if (navigator.geolocation)
       navigator.geolocation.getCurrentPosition(
@@ -231,21 +413,24 @@ class App {
 
     this.#map.on('click', this._handleMapClick.bind(this));
 
-    if (this.#clusterEnabled) {
-      this.#clusterGroup = L.markerClusterGroup({
-        maxClusterRadius: 60,
-        iconCreateFunction: cluster => {
-          const count = cluster.getChildCount();
-          return L.divIcon({
-            html: `<div class="workout-cluster"><span>${count}</span></div>`,
-            className: '',
-            iconSize: [40, 40],
-            iconAnchor: [20, 20],
-          });
-        },
-      });
-      this.#map.addLayer(this.#clusterGroup);
-    }
+    // Signal map is ready (hide skeleton, clear timeout)
+    this.#map.once('load', onMapReady);
+    this.#tileLayer.once('load', onMapReady);
+
+    // Create marker cluster group for workout markers
+    this.#clusterGroup = L.markerClusterGroup({
+      maxClusterRadius: 60,
+      iconCreateFunction: cluster => {
+        const count = cluster.getChildCount();
+        return L.divIcon({
+          html: `<div class="workout-cluster"><span>${count}</span></div>`,
+          className: '',
+          iconSize: [40, 40],
+          iconAnchor: [20, 20],
+        });
+      },
+    });
+    this.#map.addLayer(this.#clusterGroup);
     this.#workouts.forEach(work => this._renderWorkoutMarker(work));
 
     this.#map.on('mousedown touchstart', () => {
@@ -297,18 +482,6 @@ class App {
         });
       }
     });
-
-    // Cluster toggle
-    const clusterToggle = document.getElementById('clusterToggle');
-    if (this.#clusterEnabled) clusterToggle?.classList.add('active');
-    const doToggleCluster = () => {
-      this.#clusterEnabled = !this.#clusterEnabled;
-      localStorage.setItem('clusterEnabled', this.#clusterEnabled);
-      clusterToggle?.classList.toggle('active', this.#clusterEnabled);
-      location.reload();
-    };
-    document.getElementById('settingCluster')?.addEventListener('click', doToggleCluster);
-    clusterToggle?.addEventListener('click', e => { e.stopPropagation(); doToggleCluster(); });
   }
 
   _initPWAInstall() {
@@ -878,6 +1051,7 @@ class App {
       : workout.type === 'cycling' ? 'cycling-popup'
         : 'walking-popup';
 
+    // Add to cluster group (or directly to map if cluster not ready yet)
     const target = this.#clusterGroup || this.#map;
     const marker = L.marker(workout.coords)
       .bindPopup(L.popup({ maxWidth: 250, minWidth: 100, autoClose: false, closeOnClick: false, className: popupClass }))
@@ -885,24 +1059,15 @@ class App {
     target.addLayer(marker);
     this.#markers.set(workout.id, marker);
 
-    if (this.#clusterEnabled) {
-      // Cluster mode: all markers always visible — cluster handles grouping
+    if (this.#activeWorkoutId === '__pending__') {
+      this.#markers.forEach((m, id) => {
+        if (id !== workout.id) this._hideMarker(m);
+      });
       this._showMarker(marker);
-      // If this is the newly added one, open its popup
-      if (this.#activeWorkoutId === '__pending__') {
-        this.#activeWorkoutId = workout.id;
-        marker.openPopup();
-      }
+      marker.openPopup();
+      this.#activeWorkoutId = workout.id;
     } else {
-      // Non-cluster mode: hide all by default, reveal only when user clicks a workout card
-      if (this.#activeWorkoutId === '__pending__') {
-        this.#markers.forEach((m, id) => { if (id !== workout.id) this._hideMarker(m); });
-        this._showMarker(marker);
-        marker.openPopup();
-        this.#activeWorkoutId = workout.id;
-      } else {
-        this._hideMarker(marker);
-      }
+      this._hideMarker(marker);
     }
   }
 
@@ -1025,38 +1190,27 @@ class App {
     const workout = this.#workouts.find(w => w.id === workoutEl.dataset.id);
     if (!workout) return;
 
-    if (this.#clusterEnabled) {
-      // Cluster mode: all markers always visible — just centre map and open popup
-      document.querySelectorAll('.workout').forEach(el => el.classList.remove('workout--active'));
-      this._clearWorkoutRoute();
-      if (this.#activeWorkoutId === workout.id) {
-        // Deselect
-        this.#activeWorkoutId = null;
-      } else {
-        this.#activeWorkoutId = workout.id;
-        workoutEl.classList.add('workout--active');
-        this.#map.setView(workout.coords, this.#mapZoomLevel, { animate: true, pan: { duration: 1 } });
-        const marker = this.#markers.get(workout.id);
-        if (marker) marker.openPopup();
-        if (workout.routeCoords?.length > 1) this._showWorkoutRoute(workout.routeCoords);
-      }
-    } else {
-      // Non-cluster mode: hide all, show only selected
-      const isSame = this.#activeWorkoutId === workout.id;
-      this.#markers.forEach(m => this._hideMarker(m));
-      this._clearWorkoutRoute();
-      document.querySelectorAll('.workout').forEach(el => el.classList.remove('workout--active'));
+    const isSame = this.#activeWorkoutId === workout.id;
 
-      if (isSame) {
-        this.#activeWorkoutId = null;
-      } else {
-        this.#activeWorkoutId = workout.id;
-        workoutEl.classList.add('workout--active');
-        const marker = this.#markers.get(workout.id);
-        if (marker) { this._showMarker(marker); marker.openPopup(); }
-        this.#map.setView(workout.coords, this.#mapZoomLevel, { animate: true, pan: { duration: 1 } });
-        if (workout.routeCoords?.length > 1) this._showWorkoutRoute(workout.routeCoords);
+    // Hide ALL markers (invisible + not clickable)
+    this.#markers.forEach(m => this._hideMarker(m));
+    this._clearWorkoutRoute();
+    document.querySelectorAll('.workout').forEach(el => el.classList.remove('workout--active'));
+
+    if (isSame) {
+      // Deselect — all markers stay hidden
+      this.#activeWorkoutId = null;
+    } else {
+      // Select — show only this marker
+      this.#activeWorkoutId = workout.id;
+      workoutEl.classList.add('workout--active');
+      const marker = this.#markers.get(workout.id);
+      if (marker) {
+        this._showMarker(marker);
+        marker.openPopup();
       }
+      this.#map.setView(workout.coords, this.#mapZoomLevel, { animate: true, pan: { duration: 1 } });
+      if (workout.routeCoords?.length > 1) this._showWorkoutRoute(workout.routeCoords);
     }
   }
 
