@@ -1,0 +1,100 @@
+// ─── DATABASE MODULE (IndexedDB via Dexie.js) ────────────────────────────────
+// Dexie jest ładowane z CDN w index.html jako globalny Dexie
+const db = new Dexie('mapty');
+db.version(1).stores({
+    workouts: 'id, type, date, distance, duration, cadence, pace, elevGain, speed',
+});
+// ── Normalizacja ──────────────────────────────────────────────────────────────
+function _generateDescription(type, isoDate) {
+    const months = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    const d = new Date(isoDate);
+    return `${type.charAt(0).toUpperCase() + type.slice(1)} on ${months[d.getMonth()]} ${d.getDate()}`;
+}
+function normalizeWorkout(raw) {
+    const id = String(raw.id ?? Date.now());
+    const date = raw.date ? new Date(raw.date).toISOString() : new Date().toISOString();
+    const type = ['running', 'cycling', 'walking'].includes(raw.type)
+        ? raw.type
+        : 'running';
+    const coords = Array.isArray(raw.coords) && raw.coords.length === 2
+        ? raw.coords
+        : [0, 0];
+    const description = raw.description || _generateDescription(type, date);
+    const distance = Number(raw.distance) || 0;
+    const duration = Number(raw.duration) || 0;
+    let cadence = null;
+    let pace = null;
+    let elevGain = null;
+    let speed = null;
+    if (type === 'running' || type === 'walking') {
+        cadence = Number(raw.cadence) || null;
+        pace = Number(raw.pace) || (duration > 0 && distance > 0 ? duration / distance : null);
+    }
+    if (type === 'cycling') {
+        elevGain = Number(raw.elevGain ?? raw.elevationGain) || 0;
+        speed = Number(raw.speed) || (duration > 0 && distance > 0 ? distance / (duration / 60) : 0);
+    }
+    const routeCoords = Array.isArray(raw.routeCoords) ? raw.routeCoords : null;
+    return {
+        id, type, date, coords, description, distance, duration,
+        cadence, pace, elevGain, elevationGain: elevGain, speed, routeCoords,
+    };
+}
+// ── Migracja localStorage → IndexedDB ────────────────────────────────────────
+export async function migrateLocalStorageToIndexedDB() {
+    const raw = localStorage.getItem('workouts');
+    if (!raw)
+        return 0;
+    let parsed;
+    try {
+        parsed = JSON.parse(raw);
+    }
+    catch {
+        return 0;
+    }
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+        localStorage.removeItem('workouts');
+        return 0;
+    }
+    const existingCount = await db.workouts.count();
+    if (existingCount > 0) {
+        localStorage.removeItem('workouts');
+        return 0;
+    }
+    const normalized = parsed.map(w => normalizeWorkout(w));
+    try {
+        await db.workouts.bulkAdd(normalized);
+        console.info(`[DB] ✅ Zmigrowano ${normalized.length} workoutów.`);
+    }
+    catch (err) {
+        console.error('[DB] ❌ Błąd migracji:', err);
+        return 0;
+    }
+    localStorage.removeItem('workouts');
+    return normalized.length;
+}
+// ── CRUD ──────────────────────────────────────────────────────────────────────
+export async function loadWorkoutsFromDB() {
+    try {
+        return await db.workouts.orderBy('date').reverse().toArray();
+    }
+    catch (err) {
+        console.error('[DB] Błąd wczytywania:', err);
+        return [];
+    }
+}
+export async function saveWorkoutToDB(workout) {
+    const normalized = normalizeWorkout(workout);
+    await db.workouts.put(normalized);
+    return normalized.id;
+}
+export async function deleteWorkoutFromDB(id) {
+    await db.workouts.delete(String(id));
+}
+export async function clearAllWorkoutsFromDB() {
+    await db.workouts.clear();
+}
+//# sourceMappingURL=db.js.map
