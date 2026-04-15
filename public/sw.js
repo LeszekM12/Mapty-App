@@ -42,9 +42,18 @@ self.addEventListener('activate', e => {
   );
 });
 
-// FETCH — cache-first
+// FETCH — cache-first + FALLBACK FOR NAVIGATION
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
+
+  // Fallback for navigation requests (fixes 404 in PWA)
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      caches.match('index.html')
+        .then(res => res || fetch('index.html'))
+    );
+    return;
+  }
 
   if (url.protocol === 'chrome-extension:') return;
   if (e.request.method !== 'GET') return;
@@ -61,6 +70,7 @@ self.addEventListener('fetch', e => {
     url.hostname.includes('bigdatacloud')
   ) return;
 
+  // Cache-first for app shell
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
