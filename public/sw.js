@@ -1,4 +1,4 @@
-const CACHE = 'mapty-v6.1';
+const CACHE = 'mapty-v6.2';
 
 const PRECACHE = [
   './',
@@ -8,7 +8,8 @@ const PRECACHE = [
   'icon-192.png',
   'icon-512.png',
   'logo.png',
-  // Skompilowana aplikacja TS
+
+  // TS build
   'dist/main.js',
   'dist/models/Workout.js',
   'dist/modules/BottomNav.js',
@@ -23,30 +24,32 @@ const PRECACHE = [
   'dist/utils/db.js',
 ];
 
-// Install — pre-cache app shell
+// INSTALL — pre-cache + AUTO-UPDATE
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting())
+    caches.open(CACHE)
+      .then(c => c.addAll(PRECACHE))
+      .then(() => self.skipWaiting())   // ← AUTO-UPDATE
   );
 });
 
-// Activate — clean old caches
+// ACTIVATE — clean old caches + TAKE CONTROL IMMEDIATELY
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())  // ← AUTO-UPDATE
   );
 });
 
-// Fetch — cache first, fallback to network
+// FETCH — cache-first
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
   if (url.protocol === 'chrome-extension:') return;
   if (e.request.method !== 'GET') return;
 
-  // Pomiń zewnętrzne API — zawsze pobieraj live
+  // Always fetch external APIs live
   if (
     url.hostname.includes('tile.openstreetmap') ||
     url.hostname.includes('basemaps.cartocdn') ||
@@ -58,10 +61,10 @@ self.addEventListener('fetch', e => {
     url.hostname.includes('bigdatacloud')
   ) return;
 
-  // App shell — cache first
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
+
       return fetch(e.request).then(res => {
         if (res && res.status === 200) {
           const clone = res.clone();
