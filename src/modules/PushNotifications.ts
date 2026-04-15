@@ -23,9 +23,7 @@ async function registerPushSW(): Promise<ServiceWorkerRegistration | null> {
 
   try {
     // Rejestruj push-sw.js obok głównego sw.js
-    const reg = await navigator.serviceWorker.register('/push-sw.js', {
-      scope: '/',
-    });
+    const reg = await navigator.serviceWorker.register('push-sw.js');
     console.log('[Push] push-sw.js registered, scope:', reg.scope);
     return reg;
   } catch (err) {
