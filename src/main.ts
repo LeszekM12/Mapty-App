@@ -1023,14 +1023,15 @@ class App {
   }
 
   _enterTrackingView(): void {
-    // Schowaj bottom nav
     const nav = document.querySelector<HTMLElement>('.bottom-nav');
     if (nav) nav.style.display = 'none';
-    // Schowaj search bar
     document.getElementById('mapSearchBarMobile')?.classList.add('msb--hidden-tab');
-    // Aktywuj tabMap żeby mapa była widoczna
+    // Ukryj bottom bar (sport selector + start btn)
+    const bottom = document.getElementById('trkBottom');
+    if (bottom) bottom.style.display = 'none';
+    const histBtn = document.getElementById('trkHistoryToggle');
+    if (histBtn) histBtn.style.display = 'none';
     document.getElementById('tabMap')?.classList.add('tab-panel--active');
-    // Pokaż overlay trackera
     document.getElementById('trackerOverlay')?.classList.remove('hidden');
     this._setTrackingState('active');
     setTimeout(() => window.app.invalidateMapSize(), 150);
@@ -1041,6 +1042,11 @@ class App {
     document.getElementById('tabMap')?.classList.remove('tab-panel--active');
     const nav = document.querySelector<HTMLElement>('.bottom-nav');
     if (nav) nav.style.display = '';
+    // Przywróć bottom bar
+    const bottom = document.getElementById('trkBottom');
+    if (bottom) bottom.style.display = '';
+    const histBtn = document.getElementById('trkHistoryToggle');
+    if (histBtn) histBtn.style.display = '';
     this._setTrackingState('idle');
   }
 

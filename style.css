@@ -2331,3 +2331,112 @@ body {
   .act-sum { align-items: center; }
   .act-sum__sheet { border-radius: 2rem; max-width: 48rem; }
 }
+
+/* ── Activity history fixes ──────────────────────────────── */
+.act-history__item {
+  transition: transform 0.2s, opacity 0.3s, background 0.2s !important;
+}
+.act-history__item--active {
+  background: rgba(255,255,255,0.06) !important;
+  border-color: rgba(255,255,255,0.12) !important;
+}
+.act-history__top {
+  display: flex; align-items: center; gap: 0.8rem;
+  margin-bottom: 0.5rem; flex-wrap: nowrap; overflow: hidden;
+}
+.act-history__name {
+  flex: 1; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 16rem;
+}
+.act-history__stats {
+  display: flex; gap: 1rem; font-size: 1.2rem;
+  font-weight: 600; color: var(--color-light--2);
+  flex-wrap: nowrap;
+}
+/* Usuń przycisk delete z historii - hover nie działa na mobile */
+.act-history__del {
+  opacity: 1 !important;
+  background: rgba(255,255,255,0.06) !important;
+}
+
+/* ── Activity history — pełny redesign ──────────────────── */
+.act-history__item {
+  position: relative !important;
+  display: flex !important;
+  align-items: stretch !important;
+  background: var(--color-dark--2) !important;
+  border-radius: 1.2rem !important;
+  overflow: hidden !important;
+  cursor: pointer !important;
+  border: 1px solid rgba(255,255,255,0.05) !important;
+  transition: transform 0.2s, opacity 0.3s, background 0.2s !important;
+  min-height: 7rem !important;
+}
+.act-history__item:active { transform: scale(0.98) !important; }
+.act-history__item--active {
+  background: rgba(255,255,255,0.07) !important;
+  border-color: rgba(255,255,255,0.12) !important;
+}
+.act-history__bar {
+  width: 4px !important;
+  flex-shrink: 0 !important;
+  border-radius: 0 !important;
+}
+.act-history__body {
+  flex: 1 !important;
+  padding: 1.2rem 3.6rem 1.2rem 1.4rem !important;
+  min-width: 0 !important;
+}
+.act-history__top {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.6rem !important;
+  margin-bottom: 0.6rem !important;
+}
+.act-history__top > span:first-child { font-size: 1.8rem !important; flex-shrink: 0 !important; }
+.act-history__name {
+  flex: 1 !important;
+  font-size: 1.4rem !important;
+  font-weight: 700 !important;
+  color: var(--color-light--1) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.act-history__date {
+  font-size: 1.2rem !important;
+  color: var(--color-light--2) !important;
+  flex-shrink: 0 !important;
+}
+.act-history__stats {
+  display: flex !important;
+  gap: 1.4rem !important;
+  font-size: 1.35rem !important;
+  font-weight: 600 !important;
+  color: var(--color-light--2) !important;
+}
+
+/* Delete button — identyczny styl jak workout__delete */
+.act-history__del {
+  position: absolute !important;
+  top: 0.8rem !important;
+  right: 0.8rem !important;
+  width: 2.2rem !important;
+  height: 2.2rem !important;
+  border-radius: 50% !important;
+  border: none !important;
+  background: transparent !important;
+  color: var(--color-light--1) !important;
+  font-size: 1.2rem !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  opacity: 1 !important;
+  transition: background-color 0.2s, color 0.2s !important;
+  line-height: 1 !important;
+}
+.act-history__del:hover {
+  background-color: #ff6b6b22 !important;
+  color: #ff6b6b !important;
+}
