@@ -139,51 +139,66 @@ export async function generateShareImage(activity) {
     ctx.font = '18px Manrope, sans-serif';
     ctx.fillStyle = '#aaa';
     ctx.fillText(`${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`, 48, 104);
-    // Trasa na mapie (ciemne tło + rysowana linia)
-    if (activity.coords.length > 1) {
-        // Obszar trasy
-        const mapY = 130, mapH = 480;
-        ctx.fillStyle = '#242a30';
-        ctx.beginPath();
+    // Obszar mapy — zawsze rysuj ramkę
+    const mapY = 130, mapH = 480;
+    ctx.fillStyle = '#242a30';
+    ctx.beginPath();
+    if (ctx.roundRect) {
         ctx.roundRect(24, mapY, 752, mapH, 16);
-        ctx.fill();
-        // Normalizacja coords do canvas
-        const lats = activity.coords.map(c => c[0]);
-        const lngs = activity.coords.map(c => c[1]);
-        const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-        const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
-        const pad = 40;
-        const scaleX = (752 - pad * 2) / (maxLng - minLng || 0.001);
-        const scaleY = (mapH - pad * 2) / (maxLat - minLat || 0.001);
-        const scale = Math.min(scaleX, scaleY);
-        const offX = 24 + pad + ((752 - pad * 2) - (maxLng - minLng) * scale) / 2;
-        const offY = mapY + pad + ((mapH - pad * 2) - (maxLat - minLat) * scale) / 2;
-        const toX = (lng) => offX + (lng - minLng) * scale;
-        const toY = (lat) => offY + (mapH - pad * 2) - (lat - minLat) * scale + (mapY - offY + pad);
-        // Linia trasy — glow effect
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 12;
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 4;
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        activity.coords.forEach((c, i) => {
-            const x = toX(c[1]), y = toY(c[0]);
-            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-        });
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-        // Start/end dots
-        const [s0, s1] = [activity.coords[0], activity.coords[activity.coords.length - 1]];
-        ctx.fillStyle = '#00c46a';
-        ctx.beginPath();
-        ctx.arc(toX(s0[1]), toY(s0[0]), 8, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#e74c3c';
-        ctx.beginPath();
-        ctx.arc(toX(s1[1]), toY(s1[0]), 8, 0, Math.PI * 2);
-        ctx.fill();
+    }
+    else {
+        ctx.rect(24, mapY, 752, mapH);
+    }
+    ctx.fill();
+    // Trasa na mapie
+    if (activity.coords.length > 1) {
+        {
+            // Normalizacja coords do canvas
+            const lats = activity.coords.map(c => c[0]);
+            const lngs = activity.coords.map(c => c[1]);
+            const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+            const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+            const pad = 40;
+            const scaleX = (752 - pad * 2) / (maxLng - minLng || 0.001);
+            const scaleY = (mapH - pad * 2) / (maxLat - minLat || 0.001);
+            const scale = Math.min(scaleX, scaleY);
+            const offX = 24 + pad + ((752 - pad * 2) - (maxLng - minLng) * scale) / 2;
+            const offY = mapY + pad + ((mapH - pad * 2) - (maxLat - minLat) * scale) / 2;
+            const toX = (lng) => offX + (lng - minLng) * scale;
+            const toY = (lat) => offY + (mapH - pad * 2) - (lat - minLat) * scale + (mapY - offY + pad);
+            // Linia trasy — glow effect
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 12;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 4;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            activity.coords.forEach((c, i) => {
+                const x = toX(c[1]), y = toY(c[0]);
+                i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            // Start/end dots
+            const [s0, s1] = [activity.coords[0], activity.coords[activity.coords.length - 1]];
+            ctx.fillStyle = '#00c46a';
+            ctx.beginPath();
+            ctx.arc(toX(s0[1]), toY(s0[0]), 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#e74c3c';
+            ctx.beginPath();
+            ctx.arc(toX(s1[1]), toY(s1[0]), 8, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    else {
+        // Brak GPS — wyświetl info
+        ctx.font = '20px Manrope, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.textAlign = 'center';
+        ctx.fillText('No GPS route recorded', 400, mapY + mapH / 2);
+        ctx.textAlign = 'left';
     }
     // Statystyki
     const statsY = 650;
@@ -287,7 +302,19 @@ export class ActivityHistoryPanel {
             item.addEventListener('click', e => {
                 if (e.target.closest('.act-history__del'))
                     return;
-                this._showOnMap(act);
+                // Toggle: kliknięcie aktywnej karty usuwa trasę
+                if (item.classList.contains('act-history__item--active')) {
+                    item.classList.remove('act-history__item--active');
+                    if (this.activeLine) {
+                        this.map.removeLayer(this.activeLine);
+                        this.activeLine = null;
+                    }
+                }
+                else {
+                    document.querySelectorAll('.act-history__item--active').forEach(el => el.classList.remove('act-history__item--active'));
+                    item.classList.add('act-history__item--active');
+                    this._showOnMap(act);
+                }
             });
             item.querySelector('.act-history__del')?.addEventListener('click', async (e) => {
                 e.stopPropagation();

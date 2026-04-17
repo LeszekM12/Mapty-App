@@ -172,14 +172,20 @@ export async function generateShareImage(activity: ActivityRecord): Promise<void
   ctx.fillStyle = '#aaa';
   ctx.fillText(`${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`, 48, 104);
 
-  // Trasa na mapie (ciemne tło + rysowana linia)
-  if (activity.coords.length > 1) {
-    // Obszar trasy
-    const mapY = 130, mapH = 480;
-    ctx.fillStyle = '#242a30';
-    ctx.beginPath();
+  // Obszar mapy — zawsze rysuj ramkę
+  const mapY = 130, mapH = 480;
+  ctx.fillStyle = '#242a30';
+  ctx.beginPath();
+  if (ctx.roundRect) {
     ctx.roundRect(24, mapY, 752, mapH, 16);
-    ctx.fill();
+  } else {
+    ctx.rect(24, mapY, 752, mapH);
+  }
+  ctx.fill();
+
+  // Trasa na mapie
+  if (activity.coords.length > 1) {
+    {
 
     // Normalizacja coords do canvas
     const lats  = activity.coords.map(c => c[0]);
@@ -217,6 +223,14 @@ export async function generateShareImage(activity: ActivityRecord): Promise<void
     ctx.beginPath(); ctx.arc(toX(s0[1]), toY(s0[0]), 8, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#e74c3c';
     ctx.beginPath(); ctx.arc(toX(s1[1]), toY(s1[0]), 8, 0, Math.PI * 2); ctx.fill();
+    }
+  } else {
+    // Brak GPS — wyświetl info
+    ctx.font = '20px Manrope, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.textAlign = 'center';
+    ctx.fillText('No GPS route recorded', 400, mapY + mapH / 2);
+    ctx.textAlign = 'left';
   }
 
   // Statystyki
@@ -316,7 +330,15 @@ export class ActivityHistoryPanel {
 
       item.addEventListener('click', e => {
         if ((e.target as HTMLElement).closest('.act-history__del')) return;
-        this._showOnMap(act);
+        // Toggle: kliknięcie aktywnej karty usuwa trasę
+        if (item.classList.contains('act-history__item--active')) {
+          item.classList.remove('act-history__item--active');
+          if (this.activeLine) { this.map.removeLayer(this.activeLine); this.activeLine = null; }
+        } else {
+          document.querySelectorAll('.act-history__item--active').forEach(el => el.classList.remove('act-history__item--active'));
+          item.classList.add('act-history__item--active');
+          this._showOnMap(act);
+        }
       });
 
       item.querySelector('.act-history__del')?.addEventListener('click', async e => {
