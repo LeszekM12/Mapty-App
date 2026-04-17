@@ -1,8 +1,9 @@
 // ─── ROUTE PLANNER ───────────────────────────────────────────────────────────
 /// <reference types="leaflet" />
+import L from 'leaflet';
+import { MAPBOX_TOKEN } from '../config.js';
 import { ActivityMode } from '../types/index.js';
 import { qidSafe, show, hide } from '../utils/dom.js';
-const OSRM_BASE = 'https://router.project-osrm.org/route/v1';
 const ACTIVITY_SPEEDS = {
     [ActivityMode.Running]: 10,
     [ActivityMode.Cycling]: 20,
@@ -58,7 +59,7 @@ export class RoutePlanner {
             writable: true,
             value: null
         });
-        Object.defineProperty(this, "routingCtrl", {
+        Object.defineProperty(this, "routeLine", {
             enumerable: true,
             configurable: true,
             writable: true,
@@ -120,10 +121,9 @@ export class RoutePlanner {
             this.map.removeLayer(this.markerB);
             this.markerB = null;
         }
-        // @ts-ignore
-        if (this.routingCtrl) {
-            this.map.removeControl(this.routingCtrl);
-            this.routingCtrl = null;
+        if (this.routeLine) {
+            this.map.removeLayer(this.routeLine);
+            this.routeLine = null;
         }
         this.lastRouteCoords = [];
         this.lastRouteDist = 0;
@@ -187,21 +187,22 @@ export class RoutePlanner {
     setMode(mode) {
         this.mode = mode;
     }
-    // ── Private: draw route via OSRM ─────────────────────────────────────────
+    // ── Private: draw route via Mapbox Directions API ────────────────────────
     async draw() {
         if (!this.pointA || !this.pointB)
             return;
         show(qidSafe('routeLoading'));
         hide(qidSafe('routeResult'));
-        if (this.routingCtrl) {
-            this.map.removeControl(this.routingCtrl);
-            this.routingCtrl = null;
+        if (this.routeLine) {
+            this.map.removeLayer(this.routeLine);
+            this.routeLine = null;
         }
-        const profile = this.mode === ActivityMode.Cycling ? 'bike' : 'foot';
         const [aLat, aLng] = this.pointA;
         const [bLat, bLng] = this.pointB;
+        const profileMapbox = this.mode === ActivityMode.Cycling ? 'cycling' :
+            this.mode === ActivityMode.Walking ? 'walking' : 'walking';
+        const url = `https://api.mapbox.com/directions/v5/mapbox/${profileMapbox}/${aLng},${aLat};${bLng},${bLat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
         try {
-            const url = `${OSRM_BASE}/${profile}/${aLng},${aLat};${bLng},${bLat}?overview=full&geometries=geojson`;
             const res = await fetch(url);
             const data = await res.json();
             if (!data.routes?.length)
@@ -219,21 +220,14 @@ export class RoutePlanner {
                 rTime.textContent = String(mins);
             hide(qidSafe('routeLoading'));
             show(qidSafe('routeResult'));
-            // Draw polyline via Leaflet Routing Machine
-            const customRouter = {
-                route: (wps, cb) => {
-                    const coords = this.lastRouteCoords.map(c => L.latLng(c[0], c[1]));
-                    cb(null, [{ name: '', summary: { totalDistance: route.distance, totalTime: route.duration }, coordinates: coords, waypoints: wps, inputWaypoints: wps }]);
-                },
-            };
-            this.routingCtrl = L.Routing.control({
-                waypoints: [L.latLng(aLat, aLng), L.latLng(bLat, bLng)],
-                router: customRouter,
-                routeWhileDragging: false, addWaypoints: false, draggableWaypoints: false,
-                fitSelectedRoutes: true, show: false,
-                lineOptions: { styles: [{ color: '#00c46a', weight: 6, opacity: 0.85 }] },
-                createMarker: () => null,
+            // Rysuj trasę jako L.polyline — bez LRM, bez OSRM
+            const latLngs = this.lastRouteCoords.map(coord => L.latLng(coord[0], coord[1]));
+            this.routeLine = L.polyline(latLngs, {
+                color: '#00c46a',
+                weight: 6,
+                opacity: 0.85,
             }).addTo(this.map);
+            this.map.fitBounds(this.routeLine.getBounds(), { padding: [40, 40] });
             this.onRouteReady?.({ distKm: parseFloat(distKm), timeMin: mins, coords: this.lastRouteCoords });
         }
         catch {

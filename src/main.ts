@@ -6,6 +6,7 @@
 
 
 
+import { MAPBOX_TOKEN } from './config.js';
 import { Workout, Running, Cycling, Walking } from './models/Workout.js';
 import { WorkoutType } from './types/index.js';
 import type { Coords } from './types/index.js';
@@ -86,7 +87,7 @@ class App {
   #routeStep = 0;
   #routePointA: Coords | null = null;
   #routePointB: Coords | null = null;
-  #routingControl: L.Control | null = null;
+  #routeLine: L.Polyline | null = null;
   #routeMarkerA: L.Marker | null = null;
   #routeMarkerB: L.Marker | null = null;
   #routeActivityMode = 'running';
@@ -1415,31 +1416,43 @@ class App {
 
   _drawRoute(): void {
     routeLoading.classList.remove('hidden'); routeResult.classList.add('hidden');
-    if (this.#routingControl) { this.#map.removeControl(this.#routingControl); this.#routingControl = null; }
+    if (this.#routeLine) { this.#map.removeLayer(this.#routeLine); this.#routeLine = null; }
     this._stopRouteProgress();
 
-    type RCtrl = L.Control & { on(ev: string, fn:(e:unknown)=>void): RCtrl };
-    this.#routingControl = (L.Routing as unknown as { control(o:object): RCtrl }).control({
-      waypoints: [L.latLng(this.#routePointA![0], this.#routePointA![1]), L.latLng(this.#routePointB![0], this.#routePointB![1])],
-      routeWhileDragging: false, addWaypoints: false, draggableWaypoints: false,
-      fitSelectedRoutes: true, show: false,
-      lineOptions: { styles: [{ color: '#00c46a', weight: 6, opacity: 0.85 }] },
-      createMarker: () => null,
-    }).on('routesfound', (e: unknown) => {
-      routeLoading.classList.add('hidden');
-      const ev = e as { routes: Array<{ summary: { totalDistance: number }; coordinates: Array<{ lat: number; lng: number }> }> };
-      const route = ev.routes[0];
-      const totalDistM = route.summary.totalDistance;
-      const distKm = (totalDistM / 1000).toFixed(2);
-      routeDist.textContent = distKm;
-      routeTime.textContent = String(Math.round(parseFloat(distKm) / this.#activitySpeeds[this.#routeActivityMode] * 60));
-      routeResult.classList.remove('hidden');
-      this._setupRouteProgress(route.coordinates.map(c => [c.lat, c.lng] as Coords), totalDistM);
-    }).on('routingerror', () => {
-      routeLoading.classList.add('hidden');
-      routeDist.textContent = 'Error'; routeTime.textContent = '—';
-      routeResult.classList.remove('hidden');
-    }).addTo(this.#map);
+    const [aLat, aLng] = this.#routePointA!;
+    const [bLat, bLng] = this.#routePointB!;
+    const profile =
+      this.#routeActivityMode === 'cycling' ? 'cycling' :
+      this.#routeActivityMode === 'walking' ? 'walking' : 'walking';
+
+    const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${aLng},${aLat};${bLng},${bLat}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
+
+    fetch(url)
+      .then(r => r.json())
+      .then((data: { routes?: Array<{ distance: number; duration: number; geometry: { coordinates: number[][] } }> }) => {
+        if (!data.routes?.length) throw new Error('No route found');
+        const route      = data.routes[0];
+        const coords     = route.geometry.coordinates.map(c => [c[1], c[0]] as Coords);
+        const totalDistM = route.distance;
+        const distKm     = (totalDistM / 1000).toFixed(2);
+
+        routeLoading.classList.add('hidden');
+        routeDist.textContent = distKm;
+        routeTime.textContent = String(Math.round(parseFloat(distKm) / this.#activitySpeeds[this.#routeActivityMode] * 60));
+        routeResult.classList.remove('hidden');
+
+        // Rysuj trasę
+        const latLngs = coords.map(c => L.latLng(c[0], c[1]));
+        this.#routeLine = L.polyline(latLngs, { color: '#00c46a', weight: 6, opacity: 0.85 }).addTo(this.#map);
+        this.#map.fitBounds(this.#routeLine.getBounds(), { padding: [40, 40] });
+
+        this._setupRouteProgress(coords, totalDistM);
+      })
+      .catch(() => {
+        routeLoading.classList.add('hidden');
+        routeDist.textContent = 'Error'; routeTime.textContent = '—';
+        routeResult.classList.remove('hidden');
+      });
   }
 
   _cancelRoute(): void {
@@ -1447,7 +1460,7 @@ class App {
     this.#routePointA = null; this.#routePointB = null;
     if (this.#routeMarkerA) { this.#map.removeLayer(this.#routeMarkerA); this.#routeMarkerA = null; }
     if (this.#routeMarkerB) { this.#map.removeLayer(this.#routeMarkerB); this.#routeMarkerB = null; }
-    if (this.#routingControl) { this.#map.removeControl(this.#routingControl); this.#routingControl = null; }
+    if (this.#routeLine) { this.#map.removeLayer(this.#routeLine); this.#routeLine = null; }
     this._stopRouteProgress();
     routeLoading.classList.add('hidden');
     btnRoute.classList.remove('hidden'); routeInfo.classList.add('hidden'); routeResult.classList.add('hidden');
