@@ -21,7 +21,7 @@ import { WorkoutType } from './types/index.js';
 import { NetState, showSkeleton, startMapTimeout, initOnlineDetector, initRetryBtn, } from './modules/OfflineDetector.js';
 import { initWeatherWidget } from './modules/WeatherWidget.js';
 import { loadWorkoutsFromDB, saveWorkoutToDB, clearAllWorkoutsFromDB, migrateLocalStorageToIndexedDB, } from './modules/db.js';
-import { initPushNotifications, sendWorkoutAddedPush, sendWorkoutDeletedPush, sendWelcomeBackPush, sendLongBreakPush, sendArrivedAtDestinationPush, sendWeatherPush, } from './modules/PushNotifications.js';
+import { initPushNotifications, resubscribeIfNeeded, sendWorkoutAddedPush, sendWorkoutDeletedPush, sendWelcomeBackPush, sendLongBreakPush, sendArrivedAtDestinationPush, sendWeatherPush, } from './modules/PushNotifications.js';
 import { Tracker, formatDuration, formatPace, formatDistance, SPORT_COLORS } from './modules/Tracker.js';
 import { showGoodJobSplash, showActivitySummary, ActivityHistoryPanel } from './modules/ActivityView.js';
 import { saveActivity } from './modules/db.js';
@@ -182,6 +182,8 @@ class App {
         __classPrivateFieldGet(this, _App_map, "f").on('mouseup touchend', () => {
             __classPrivateFieldSet(this, _App_recenterTimer, setTimeout(() => { __classPrivateFieldSet(this, _App_userTouchingMap, false, "f"); }, 5000), "f");
         });
+        // Przy każdym starcie wyślij subskrypcję do backendu (naprawia reset MemoryDB)
+        void resubscribeIfNeeded();
         void initPushNotifications().then(async () => {
             // longBreak ma priorytet — jeśli wysłany, pomijamy welcomeBack
             const longBreakSent = await sendLongBreakPush();
