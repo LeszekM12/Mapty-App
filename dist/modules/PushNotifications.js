@@ -157,9 +157,41 @@ export async function initPushNotifications() {
 }
 // ── Testowa funkcja — wywołaj z konsoli przeglądarki ─────────────────────────
 // window.testPush('Trening ukończony!', 'Świetna robota! +5km 🏃')
-// ═══════════════════════════════════════════════════════════════════════
-// PUSH TRIGGERS
-// ═══════════════════════════════════════════════════════════════════════
+export async function testPushNotification(title = 'Mapty Test', body = 'Push notifications działają! 🎉') {
+    try {
+        const res = await fetch(`${BACKEND_URL}/push/send`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, body, url: '/' }),
+        });
+        const data = await res.json();
+        console.log('[Push] Test sent:', data);
+    }
+    catch (err) {
+        console.error('[Push] Test failed:', err);
+    }
+}
+// ── Re-subskrypcja przy każdym starcie ────────────────────────────────────────
+export async function resubscribeIfNeeded() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window))
+        return;
+    if (Notification.permission !== 'granted')
+        return;
+    try {
+        const reg = await navigator.serviceWorker.getRegistration(new URL('push-sw.js', window.location.href).pathname);
+        if (!reg)
+            return;
+        const sub = await reg.pushManager.getSubscription();
+        if (!sub)
+            return;
+        await sendSubscriptionToBackend(sub);
+        console.log('[Push] Re-subscribed after potential backend restart');
+    }
+    catch (err) {
+        console.warn('[Push] resubscribeIfNeeded failed:', err);
+    }
+}
+// ── Push triggers ─────────────────────────────────────────────────────────────
 async function sendPush(title, body) {
     try {
         await fetch(`${BACKEND_URL}/push/send`, {
@@ -211,41 +243,6 @@ export async function sendWeatherPush() {
         localStorage.setItem(KEY, String(now));
     }
     catch { /* ignore */ }
-}
-// Wywołuj przy każdym starcie apki — wysyła aktualną subskrypcję do backendu
-// Naprawia problem z resetem MemoryDB po restarcie Rendera
-export async function resubscribeIfNeeded() {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window))
-        return;
-    if (Notification.permission !== 'granted')
-        return;
-    try {
-        const reg = await navigator.serviceWorker.getRegistration(new URL('push-sw.js', window.location.href).pathname);
-        if (!reg)
-            return;
-        const sub = await reg.pushManager.getSubscription();
-        if (!sub)
-            return;
-        await sendSubscriptionToBackend(sub);
-        console.log('[Push] Re-subscribed after potential backend restart');
-    }
-    catch (err) {
-        console.warn('[Push] resubscribeIfNeeded failed:', err);
-    }
-}
-export async function testPushNotification(title = 'Mapty Test', body = 'Push notifications działają! 🎉') {
-    try {
-        const res = await fetch(`${BACKEND_URL}/push/send`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, body, url: '/' }),
-        });
-        const data = await res.json();
-        console.log('[Push] Test sent:', data);
-    }
-    catch (err) {
-        console.error('[Push] Test failed:', err);
-    }
 }
 // Eksponuj na window do testów z konsoli
 window.testPush = testPushNotification;

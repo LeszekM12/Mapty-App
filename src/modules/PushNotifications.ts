@@ -183,10 +183,43 @@ export async function initPushNotifications(): Promise<void> {
 // ── Testowa funkcja — wywołaj z konsoli przeglądarki ─────────────────────────
 // window.testPush('Trening ukończony!', 'Świetna robota! +5km 🏃')
 
+export async function testPushNotification(
+  title = 'Mapty Test',
+  body  = 'Push notifications działają! 🎉',
+): Promise<void> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/push/send`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ title, body, url: '/' }),
+    });
+    const data = await res.json();
+    console.log('[Push] Test sent:', data);
+  } catch (err) {
+    console.error('[Push] Test failed:', err);
+  }
+}
 
-// ═══════════════════════════════════════════════════════════════════════
-// PUSH TRIGGERS
-// ═══════════════════════════════════════════════════════════════════════
+
+// ── Re-subskrypcja przy każdym starcie ────────────────────────────────────────
+export async function resubscribeIfNeeded(): Promise<void> {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (Notification.permission !== 'granted') return;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration(
+      new URL('push-sw.js', window.location.href).pathname
+    );
+    if (!reg) return;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return;
+    await sendSubscriptionToBackend(sub);
+    console.log('[Push] Re-subscribed after potential backend restart');
+  } catch (err) {
+    console.warn('[Push] resubscribeIfNeeded failed:', err);
+  }
+}
+
+// ── Push triggers ─────────────────────────────────────────────────────────────
 
 async function sendPush(title: string, body: string): Promise<void> {
   try {
@@ -237,48 +270,14 @@ export async function sendWeatherPush(): Promise<void> {
       navigator.geolocation.getCurrentPosition(p => res(p.coords), rej, { timeout: 5000 })
     );
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.latitude}&longitude=${coords.longitude}&current=temperature_2m,weathercode,windspeed_10m&timezone=auto&forecast_days=1`;
-    const data = await (await fetch(url)).json() as { current: { temperature_2m: number; weathercode: number; windspeed_10m: number } };
+    const data = await (await fetch(url)).json() as {
+      current: { temperature_2m: number; weathercode: number; windspeed_10m: number };
+    };
     const { temperature_2m: temp, weathercode: code, windspeed_10m: wind } = data.current;
     if (code > 3 || temp < 8 || temp > 30 || wind >= 30) return;
     await sendPush('Idealna pogoda na trening! 🏃', `${code === 0 ? '☀️' : '🌤️'} ${Math.round(temp)}°C — wychodź!`);
     localStorage.setItem(KEY, String(now));
   } catch { /* ignore */ }
-}
-
-// Wywołuj przy każdym starcie apki — wysyła aktualną subskrypcję do backendu
-// Naprawia problem z resetem MemoryDB po restarcie Rendera
-export async function resubscribeIfNeeded(): Promise<void> {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-  if (Notification.permission !== 'granted') return;
-  try {
-    const reg = await navigator.serviceWorker.getRegistration(
-      new URL('push-sw.js', window.location.href).pathname
-    );
-    if (!reg) return;
-    const sub = await reg.pushManager.getSubscription();
-    if (!sub) return;
-    await sendSubscriptionToBackend(sub);
-    console.log('[Push] Re-subscribed after potential backend restart');
-  } catch (err) {
-    console.warn('[Push] resubscribeIfNeeded failed:', err);
-  }
-}
-
-export async function testPushNotification(
-  title = 'Mapty Test',
-  body  = 'Push notifications działają! 🎉',
-): Promise<void> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/push/send`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ title, body, url: '/' }),
-    });
-    const data = await res.json();
-    console.log('[Push] Test sent:', data);
-  } catch (err) {
-    console.error('[Push] Test failed:', err);
-  }
 }
 
 // Eksponuj na window do testów z konsoli
