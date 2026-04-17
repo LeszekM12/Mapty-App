@@ -21,6 +21,7 @@ import {
 } from './modules/db.js';
 import {
   initPushNotifications,
+  resubscribeIfNeeded,
   testPushNotification,
   sendWorkoutAddedPush,
   sendWorkoutDeletedPush,
@@ -241,6 +242,8 @@ class App {
     this.#map.on('mouseup touchend', () => {
       this.#recenterTimer = setTimeout(() => { this.#userTouchingMap = false; }, 5000);
     });
+    // Przy każdym starcie wyślij subskrypcję do backendu (naprawia reset MemoryDB)
+    void resubscribeIfNeeded();
     void initPushNotifications().then(async () => {
       // longBreak ma priorytet — jeśli wysłany, pomijamy welcomeBack
       const longBreakSent = await sendLongBreakPush();

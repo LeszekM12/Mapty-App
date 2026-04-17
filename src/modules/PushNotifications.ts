@@ -2,7 +2,7 @@
 // Plik: src/modules/PushNotifications.ts
 // Importuj i wywołaj initPushNotifications() po załadowaniu mapy.
 
-import { BACKEND_URL } from '../config.js';
+const BACKEND_URL = 'https://mapty-backend-lexb.onrender.com';
 
 // ── Helper: konwersja base64 → Uint8Array (wymagane przez pushManager) ────────
 
@@ -183,34 +183,17 @@ export async function initPushNotifications(): Promise<void> {
 // ── Testowa funkcja — wywołaj z konsoli przeglądarki ─────────────────────────
 // window.testPush('Trening ukończony!', 'Świetna robota! +5km 🏃')
 
-export async function testPushNotification(
-  title = 'Mapty Test',
-  body  = 'Push notifications działają! 🎉',
-): Promise<void> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/push/send`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ title, body, url: '/' }),
-    });
-    const data = await res.json();
-    console.log('[Push] Test sent:', data);
-  } catch (err) {
-    console.error('[Push] Test failed:', err);
-  }
-}
 
-
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
 // PUSH TRIGGERS
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
 
 async function sendPush(title: string, body: string): Promise<void> {
   try {
     await fetch(`${BACKEND_URL}/push/send`, {
-      method:  'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ title, body }),
+      body: JSON.stringify({ title, body }),
     });
   } catch (err) {
     console.warn('[Push] sendPush failed:', err);
@@ -230,12 +213,11 @@ export async function sendWelcomeBackPush(): Promise<void> {
 }
 
 export async function sendLongBreakPush(): Promise<boolean> {
-  const LAST_OPEN_KEY = 'mapty_last_open';
-  const now           = Date.now();
-  const lastOpen      = Number(localStorage.getItem(LAST_OPEN_KEY) ?? 0);
-  const hoursSince    = (now - lastOpen) / (1000 * 60 * 60);
-  localStorage.setItem(LAST_OPEN_KEY, String(now));
-  if (lastOpen > 0 && hoursSince > 24) {
+  const KEY = 'mapty_last_open';
+  const now = Date.now();
+  const last = Number(localStorage.getItem(KEY) ?? 0);
+  localStorage.setItem(KEY, String(now));
+  if (last > 0 && (now - last) / (1000 * 60 * 60) > 24) {
     await sendPush('Miło Cię widzieć ponownie! 🏃', 'Co dziś robimy? Czas na trening!');
     return true;
   }
@@ -247,27 +229,55 @@ export async function sendArrivedAtDestinationPush(): Promise<void> {
 }
 
 export async function sendWeatherPush(): Promise<void> {
-  const LAST_WEATHER_PUSH_KEY = 'mapty_last_weather_push';
-  const now                   = Date.now();
-  const lastPush              = Number(localStorage.getItem(LAST_WEATHER_PUSH_KEY) ?? 0);
-  if ((now - lastPush) / (1000 * 60 * 60) < 6) return;
+  const KEY = 'mapty_last_weather_push';
+  const now = Date.now();
+  if ((now - Number(localStorage.getItem(KEY) ?? 0)) / (1000 * 60 * 60) < 6) return;
   try {
-    const coords = await new Promise<GeolocationCoordinates>((resolve, reject) =>
-      navigator.geolocation.getCurrentPosition(p => resolve(p.coords), reject, { timeout: 5000 }),
+    const coords = await new Promise<GeolocationCoordinates>((res, rej) =>
+      navigator.geolocation.getCurrentPosition(p => res(p.coords), rej, { timeout: 5000 })
     );
-    const { latitude: lat, longitude: lng } = coords;
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weathercode,windspeed_10m&timezone=auto&forecast_days=1`;
-    const res  = await fetch(url);
-    const data = await res.json() as {
-      current: { temperature_2m: number; weathercode: number; windspeed_10m: number };
-    };
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.latitude}&longitude=${coords.longitude}&current=temperature_2m,weathercode,windspeed_10m&timezone=auto&forecast_days=1`;
+    const data = await (await fetch(url)).json() as { current: { temperature_2m: number; weathercode: number; windspeed_10m: number } };
     const { temperature_2m: temp, weathercode: code, windspeed_10m: wind } = data.current;
     if (code > 3 || temp < 8 || temp > 30 || wind >= 30) return;
-    const icon = code === 0 ? '☀️' : '🌤️';
-    await sendPush('Idealna pogoda na trening! 🏃', `${icon} ${Math.round(temp)}°C i ${wind} km/h — wychodź!`);
-    localStorage.setItem(LAST_WEATHER_PUSH_KEY, String(now));
+    await sendPush('Idealna pogoda na trening! 🏃', `${code === 0 ? '☀️' : '🌤️'} ${Math.round(temp)}°C — wychodź!`);
+    localStorage.setItem(KEY, String(now));
+  } catch { /* ignore */ }
+}
+
+// Wywołuj przy każdym starcie apki — wysyła aktualną subskrypcję do backendu
+// Naprawia problem z resetem MemoryDB po restarcie Rendera
+export async function resubscribeIfNeeded(): Promise<void> {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (Notification.permission !== 'granted') return;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration(
+      new URL('push-sw.js', window.location.href).pathname
+    );
+    if (!reg) return;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return;
+    await sendSubscriptionToBackend(sub);
+    console.log('[Push] Re-subscribed after potential backend restart');
   } catch (err) {
-    console.warn('[Push] sendWeatherPush failed:', err);
+    console.warn('[Push] resubscribeIfNeeded failed:', err);
+  }
+}
+
+export async function testPushNotification(
+  title = 'Mapty Test',
+  body  = 'Push notifications działają! 🎉',
+): Promise<void> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/push/send`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ title, body, url: '/' }),
+    });
+    const data = await res.json();
+    console.log('[Push] Test sent:', data);
+  } catch (err) {
+    console.error('[Push] Test failed:', err);
   }
 }
 
