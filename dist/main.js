@@ -1086,6 +1086,7 @@ class App {
             if (!__classPrivateFieldGet(this, _App_tracker, "f"))
                 return;
             __classPrivateFieldGet(this, _App_tracker, "f").start();
+            void this._requestWakeLock();
             this._enterTrackingView();
         });
         // ── PAUSE / RESUME ────────────────────────────────────────────────────
@@ -1106,6 +1107,7 @@ class App {
             if (!__classPrivateFieldGet(this, _App_tracker, "f"))
                 return;
             const activity = __classPrivateFieldGet(this, _App_tracker, "f").stop();
+            void this._releaseWakeLock();
             this._exitTrackingView();
             if (!activity)
                 return;
@@ -1122,6 +1124,7 @@ class App {
             if (!confirm('Discard activity?'))
                 return;
             __classPrivateFieldGet(this, _App_tracker, "f")?.reset();
+            void this._releaseWakeLock();
             this._exitTrackingView();
         });
     }
@@ -1139,11 +1142,13 @@ class App {
             histBtn.style.display = 'none';
         document.getElementById('tabMap')?.classList.add('tab-panel--active');
         document.getElementById('trackerOverlay')?.classList.remove('hidden');
+        document.getElementById('routeMiniPill')?.classList.add('pill--above-tracker');
         this._setTrackingState('active');
         setTimeout(() => window.app.invalidateMapSize(), 150);
     }
     _exitTrackingView() {
         document.getElementById('trackerOverlay')?.classList.add('hidden');
+        document.getElementById('routeMiniPill')?.classList.remove('pill--above-tracker');
         document.getElementById('tabMap')?.classList.remove('tab-panel--active');
         const nav = document.querySelector('.bottom-nav');
         if (nav)
