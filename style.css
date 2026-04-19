@@ -2440,3 +2440,23 @@ body {
     background-color: #ff6b6b22 !important;
     color: #ff6b6b !important;
 }
+
+/* workout-wrapper — kontener dla kafelka + floating button X */
+.workout-wrapper {
+  position: relative;
+  margin-bottom: 1.75rem;
+}
+.workout-wrapper .workout {
+  margin-bottom: 0 !important;
+}
+
+/* X tylko na desktop, swipe na mobile */
+@media (max-width: 899px) {
+    .workout__delete {
+        display: none !important;
+    }
+    .workout {
+        touch-action: pan-y;
+        overflow: hidden;
+    }
+}
