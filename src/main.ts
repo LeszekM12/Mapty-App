@@ -159,6 +159,7 @@ class App {
     form.addEventListener('submit', this._newWorkout.bind(this));
     inputType.addEventListener('change', this._toggleElevationField);
     containerWorkouts.addEventListener('click', this._moveToPopup.bind(this));
+    this._initContainerSwipe();
     btnRoute.addEventListener('click', this._startRouteMode.bind(this));
     btnCancelRoute.addEventListener('click', this._cancelRoute.bind(this));
     btnTrack.addEventListener('click', this._toggleTracking.bind(this));
@@ -832,23 +833,68 @@ class App {
       </li>`;
 
     form.insertAdjacentHTML('afterend', liHtml);
+  }
 
-    // Button tworzony przez createElement po dodaniu li do DOM
-    // Pozwala uniknąć problemu z display:grid stacking context
-    const liEl = document.querySelector<HTMLElement>(`.workout[data-id="${deleteId}"]`);
-    if (liEl) {
-      const delBtn = document.createElement('button');
-      delBtn.className = 'workout__delete';
-      delBtn.textContent = '✕';
-      delBtn.title = 'Delete';
-      delBtn.style.cssText = 'position:absolute;top:0.4rem;right:0.4rem;width:3.2rem;height:3.2rem;border-radius:50%;border:none;background:rgba(255,255,255,0.1);color:var(--color-light--1);font-size:1.4rem;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:9999;pointer-events:all;touch-action:manipulation;';
-      liEl.appendChild(delBtn);
-      delBtn.addEventListener('pointerdown', e => {
-        e.stopImmediatePropagation();
-        e.preventDefault();
-        if (confirm('Delete this workout?')) this._deleteWorkout(deleteId);
-      });
-    }
+  _initContainerSwipe(): void {
+    let startX = 0, startY = 0, currentX = 0;
+    let swipeEl: HTMLElement | null = null;
+    let isSwiping = false, locked = false;
+    const THRESHOLD = 80;
+
+    document.addEventListener('touchstart', (e: TouchEvent) => {
+      const el = (e.target as HTMLElement).closest<HTMLElement>('.workout');
+      if (!el) return;
+      swipeEl = el;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      currentX = 0; isSwiping = false; locked = false;
+      swipeEl.style.transition = 'none';
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e: TouchEvent) => {
+      if (!swipeEl || locked) return;
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      if (!isSwiping && Math.abs(dy) > Math.abs(dx) + 10) { locked = true; return; }
+      if (Math.abs(dx) > 10) isSwiping = true;
+      if (!isSwiping) return;
+      if (e.cancelable) e.preventDefault();
+      currentX = dx;
+      const clamped = Math.max(-150, Math.min(150, dx));
+      swipeEl.style.transform = `translateX(${clamped}px)`;
+      const ratio = Math.min(Math.abs(clamped) / THRESHOLD, 1);
+      swipeEl.style.boxShadow = `inset 0 0 0 2px rgba(255,80,80,${ratio * 0.9})`;
+    }, { passive: false });
+
+    document.addEventListener('touchend', () => {
+      if (!swipeEl || !isSwiping) { swipeEl = null; return; }
+      const el = swipeEl; swipeEl = null;
+      el.style.transition = 'transform 0.28s ease, opacity 0.28s ease, box-shadow 0.28s ease';
+      if (Math.abs(currentX) >= THRESHOLD) {
+        const dir = currentX > 0 ? 1 : -1;
+        el.style.transform = `translateX(${dir * 120}%)`;
+        el.style.opacity = '0';
+        setTimeout(() => {
+          el.style.transition = '';
+          el.style.transform = '';
+          el.style.opacity = '';
+          el.style.boxShadow = '';
+          const id = el.dataset.id;
+          if (id && confirm('Delete this workout?')) this._deleteWorkout(id);
+        }, 280);
+      } else {
+        el.style.transform = '';
+        el.style.boxShadow = '';
+      }
+    }, { passive: true });
+
+    document.addEventListener('touchcancel', () => {
+      if (!swipeEl) return;
+      swipeEl.style.transition = '';
+      swipeEl.style.transform = '';
+      swipeEl.style.boxShadow = '';
+      swipeEl = null;
+    }, { passive: true });
   }
 
   _moveToPopup(e: Event): void {
@@ -900,7 +946,8 @@ class App {
       el.style.transform = 'translateX(-110%)'; el.style.opacity = '0';
       setTimeout(() => el.remove(), 300);
     }
-    this._setLocalStorage(); this._renderStats(); this._renderStreak();
+    void deleteWorkoutFromDB(id);
+    this._renderStats(); this._renderStreak();
     void sendWorkoutDeletedPush();
   }
 
