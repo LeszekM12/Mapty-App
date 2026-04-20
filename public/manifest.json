@@ -1,9 +1,9 @@
 {
-  "name": "Mapty - Workouts App",
-  "short_name": "Mapty",
+  "name": "MapYou - Workouts App",
+  "short_name": "MapYou",
   "description": "Track your workouts on the map",
-  "start_url": "/Mapty-App/",
-  "scope": "/Mapty-App/",
+  "start_url": "/MapYou-App/",
+  "scope": "/MapYou-App/",
   "display": "standalone",
   "background_color": "#2d3439",
   "theme_color": "#2d3439",
