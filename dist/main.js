@@ -2194,5 +2194,5 @@ window.app = new App();
         obs.observe(trackerOv, { attributes: true });
 })();
 // ─── WEATHER COMPONENTS (top bar + modal) ────────────────────────────────────
-void initWeatherComponents(document.body);
+void initWeatherComponents();
 //# sourceMappingURL=main.js.map

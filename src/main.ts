@@ -1963,4 +1963,4 @@ window.app = new App();
 })();
 
 // ─── WEATHER COMPONENTS (top bar + modal) ────────────────────────────────────
-void initWeatherComponents(document.body);
+void initWeatherComponents();
