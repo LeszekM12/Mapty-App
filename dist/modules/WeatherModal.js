@@ -81,6 +81,7 @@ function buildModal(data) {
       </div>
 
     </div>`;
+    // icon can be emoji OR an <img> SVG tag — use innerHTML-safe span
     const hourlyHTML = hourly.map(h => {
         if (h.isSunset)
             return `
@@ -89,10 +90,19 @@ function buildModal(data) {
       <span class="wm-hourly__icon">🌇</span>
       <span class="wm-hourly__temp wm-hourly__sunset-lbl">Sunset</span>
     </div>`;
+        if (h.isSunrise)
+            return `
+    <div class="wm-hourly__item wm-hourly__item--sunrise">
+      <span class="wm-hourly__time">${h.time}</span>
+      <span class="wm-hourly__icon">🌅</span>
+      <span class="wm-hourly__temp wm-hourly__sunrise-lbl">Sunrise</span>
+    </div>`;
+        // icon is emoji string OR <img> SVG tag — both work in innerHTML
+        const isImgIcon = h.icon.startsWith('<img');
         return `
     <div class="wm-hourly__item">
       <span class="wm-hourly__time">${h.time}</span>
-      <span class="wm-hourly__icon">${h.icon}</span>
+      <span class="wm-hourly__icon${isImgIcon ? ' wm-hourly__icon--img' : ''}">${h.icon}</span>
       <span class="wm-hourly__temp">${h.temp}°</span>
     </div>`;
     }).join('');
@@ -138,7 +148,7 @@ function buildModal(data) {
           <span class="wm-header__brand">MapYou</span>
         </div>
         <div class="wm-header__weather">
-          <span class="wm-header__wicon">${c.icon}</span>
+          <span class="wm-header__wicon wm-icon--svg">${c.icon}</span>
           <span class="wm-header__temp">${c.temp}°C</span>
           <span class="wm-header__desc">${c.description} · Feels ${c.feelsLike}°</span>
         </div>

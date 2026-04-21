@@ -1,6 +1,7 @@
 // ─── WEATHER SERVICE ──────────────────────────────────────────────────────────
 // Fetches all required fields from Open-Meteo (free, no API key needed).
 // Replaces the old WeatherWidget.ts fetch logic.
+import { nightSvgIcon, nightIconKey } from './nightIcons.js';
 // Day icons
 const WMO_DAY = {
     0: { icon: '☀️', description: 'Clear sky' },
@@ -28,17 +29,32 @@ const WMO_DAY = {
     96: { icon: '⛈️', description: 'Thunderstorm + hail' },
     99: { icon: '⛈️', description: 'Thunderstorm + heavy hail' },
 };
-// Night icons — codes 0-2 get moon variants, rest stays the same
-const WMO_NIGHT = {
-    ...WMO_DAY,
-    0: { icon: '🌙', description: 'Clear night' },
-    1: { icon: '🌙', description: 'Mainly clear' },
-    2: { icon: '🌑', description: 'Partly cloudy' },
-    3: { icon: '☁️', description: 'Overcast' },
-};
-/** Returns icon + description, using night variants when isNight=true */
+/** Returns icon + description.
+ *  When isNight=true, icon is an <img> SVG tag instead of emoji. */
 export function wmoInfo(code, isNight = false) {
-    const WMO = isNight ? WMO_NIGHT : WMO_DAY;
+    if (isNight) {
+        const dayInfo = WMO_DAY[code] ?? (() => {
+            if (code <= 1)
+                return WMO_DAY[1];
+            if (code <= 3)
+                return WMO_DAY[3];
+            if (code <= 48)
+                return WMO_DAY[45];
+            if (code <= 55)
+                return WMO_DAY[55];
+            if (code <= 65)
+                return WMO_DAY[65];
+            if (code <= 77)
+                return WMO_DAY[77];
+            if (code <= 82)
+                return WMO_DAY[82];
+            if (code <= 86)
+                return WMO_DAY[86];
+            return WMO_DAY[95];
+        })();
+        return { icon: nightSvgIcon(nightIconKey(code)), description: dayInfo.description };
+    }
+    const WMO = WMO_DAY;
     if (WMO[code])
         return WMO[code];
     if (code <= 1)
@@ -201,33 +217,52 @@ export async function fetchWeatherFull(coords) {
         sunset: fmtTime(raw.daily.sunset[0]),
         progress: sunProgress(raw.daily.sunrise[0], raw.daily.sunset[0]),
     };
-    // Hourly — next 23 hours from now, with sunset marker inserted
+    // Hourly — next 23 hours
+    // Markers: today's sunset + tomorrow's sunrise inserted at correct positions
     const now24 = new Date();
     const cutoff24 = new Date(now24.getTime() + 23 * 60 * 60 * 1000);
+    const todaySunsetMs = new Date(raw.daily.sunset[0]).getTime();
+    const todaySunriseMs = new Date(raw.daily.sunrise[0]).getTime();
+    // Tomorrow's sunrise (index 1 in daily array)
+    const tomorrowSunriseMs = raw.daily.sunrise[1]
+        ? new Date(raw.daily.sunrise[1]).getTime()
+        : todaySunriseMs + 24 * 60 * 60 * 1000;
     const hourly = [];
     let sunsetInserted = false;
-    const sunsetISO = raw.daily.sunset[0];
-    const sunsetMs = new Date(sunsetISO).getTime();
-    for (let i = 0; i < raw.hourly.time.length && hourly.length < 24; i++) {
+    let sunriseInserted = false;
+    for (let i = 0; i < raw.hourly.time.length; i++) {
         const slotTime = new Date(raw.hourly.time[i]);
         if (slotTime <= now24)
-            continue; // skip past slots
+            continue;
         if (slotTime > cutoff24)
-            break; // stop after 23h
-        // Insert sunset card between the two slots that straddle it
-        if (!sunsetInserted && slotTime.getTime() > sunsetMs && sunsetMs > now24.getTime()) {
+            break;
+        const slotMs = slotTime.getTime();
+        // Insert today's sunset card
+        if (!sunsetInserted && slotMs > todaySunsetMs && todaySunsetMs > now24.getTime()) {
             sunsetInserted = true;
             hourly.push({
-                time: fmtTime(sunsetISO),
+                time: fmtTime(raw.daily.sunset[0]),
                 temp: Math.round(raw.hourly.temperature_2m[i]),
                 icon: '🌇',
-                weatherCode: -1, // special marker
+                weatherCode: -1,
                 isSunset: true,
             });
         }
-        const hNight = isNightTime(raw.daily.sunrise[0], raw.daily.sunset[0]);
-        // For future hours, check if that specific hour is night
-        const hIsNight = slotTime.getTime() > sunsetMs || slotTime.getTime() < new Date(raw.daily.sunrise[0]).getTime();
+        // Insert tomorrow's sunrise card
+        if (!sunriseInserted && slotMs > tomorrowSunriseMs && tomorrowSunriseMs > now24.getTime()) {
+            sunriseInserted = true;
+            hourly.push({
+                time: fmtTime(raw.daily.sunrise[1] ?? ''),
+                temp: Math.round(raw.hourly.temperature_2m[i]),
+                icon: '🌅',
+                weatherCode: -2,
+                isSunset: false,
+                isSunrise: true,
+            });
+        }
+        // Each slot gets day/night based on its own time vs today's sunset/sunrise
+        // and tomorrow's sunrise
+        const hIsNight = (slotMs > todaySunsetMs && slotMs < tomorrowSunriseMs);
         hourly.push({
             time: fmtTime(raw.hourly.time[i]),
             temp: Math.round(raw.hourly.temperature_2m[i]),
