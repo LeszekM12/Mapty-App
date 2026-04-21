@@ -357,16 +357,26 @@ export class FriendsView {
         const friends = await getAllFriends();
         let changed = false;
         for (const f of friends) {
-            if (!f.liveToken)
-                continue;
             try {
-                const res = await fetch(`${BACKEND_URL}/live/status/${f.liveToken}`);
-                const data = await res.json();
-                if (data.session === 'finished' || data.session === 'not_found') {
-                    // Wyczyść token
-                    const { updateFriendLiveToken } = await import('./FriendsDB.js');
-                    await updateFriendLiveToken(f.subscriptionId, null);
-                    changed = true;
+                if (f.liveToken) {
+                    // Sprawdź czy aktywna sesja nadal trwa
+                    const res = await fetch(`${BACKEND_URL}/live/status/${f.liveToken}`);
+                    const data = await res.json();
+                    if (data.session === 'finished' || data.session === 'not_found') {
+                        await updateFriendLiveToken(f.subscriptionId, null);
+                        changed = true;
+                    }
+                }
+                else {
+                    // Sprawdź czy znajomy właśnie zaczął trening
+                    // Używamy jego endpoint jako klucza
+                    const ep = encodeURIComponent(f.subscriptionId);
+                    const res = await fetch(`${BACKEND_URL}/live/active/${ep}`);
+                    const data = await res.json();
+                    if (data.active && data.token) {
+                        await updateFriendLiveToken(f.subscriptionId, data.token);
+                        changed = true;
+                    }
                 }
             }
             catch { /* ignoruj */ }
