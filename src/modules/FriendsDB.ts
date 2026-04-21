@@ -95,35 +95,70 @@ export async function updateFriendLastSeen(subscriptionId: string): Promise<void
 // ── Invite link helpers ───────────────────────────────────────────────────────
 
 /**
- * Generuje link zaproszenia zawierający imię i push subskrypcję.
- * Format: https://domain/#invite=<base64>
+ * Generuje krótki link zaproszenia przez backend.
+ * Format: https://domain/#invite=ABC12345 (8 znaków zamiast 500)
  */
-export function generateInviteLink(name: string, pushSub: Friend['pushSub']): string {
-  const payload: InvitePayload = { name, pushSub };
-  const encoded = btoa(JSON.stringify(payload));
+export async function generateInviteLink(
+  name:    string,
+  pushSub: Friend['pushSub'],
+  backendUrl: string,
+): Promise<string> {
+  const res  = await fetch(`${backendUrl}/live/invite`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ name, pushSub }),
+  });
+  const data = await res.json() as { status: string; code: string };
+  if (data.status !== 'ok') throw new Error('Failed to create invite');
   const base = window.location.href.split('#')[0];
-  return `${base}#invite=${encoded}`;
+  return `${base}#invite=${data.code}`;
 }
 
 /**
- * Parsuje link zaproszenia.
- * Zwraca null jeśli link jest nieprawidłowy.
+ * Pobiera dane zaproszenia z backendu na podstawie krótkiego kodu.
  */
-export function parseInviteLink(url: string): InvitePayload | null {
+export async function fetchInviteByCode(
+  code:       string,
+  backendUrl: string,
+): Promise<InvitePayload | null> {
   try {
-    const hash = new URL(url).hash;
-    if (!hash.startsWith('#invite=')) return null;
-    const encoded = hash.replace('#invite=', '');
-    return JSON.parse(atob(encoded)) as InvitePayload;
+    const res  = await fetch(`${backendUrl}/live/invite/${code}`);
+    if (!res.ok) return null;
+    const data = await res.json() as { status: string; name: string; pushSub: Friend['pushSub'] };
+    return { name: data.name, pushSub: data.pushSub };
   } catch {
     return null;
   }
 }
 
 /**
- * Sprawdza URL przy starcie aplikacji — jeśli jest #invite=...,
- * automatycznie otwiera modal dodania znajomego.
+ * Parsuje stary base64 link (fallback dla kompatybilności).
  */
-export function checkInviteInUrl(): InvitePayload | null {
-  return parseInviteLink(window.location.href);
+export function parseInviteLink(url: string): InvitePayload | null {
+  try {
+    const hash = new URL(url).hash;
+    if (!hash.startsWith('#invite=')) return null;
+    const code = hash.replace('#invite=', '');
+    // Stary format — base64 (długi string)
+    if (code.length > 20) {
+      return JSON.parse(atob(code)) as InvitePayload;
+    }
+    // Nowy format — krótki kod, wymaga fetch (zwróć null, obsłuż async w FriendsView)
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Sprawdza URL przy starcie — zwraca kod lub null.
+ */
+export function checkInviteInUrl(): string | null {
+  try {
+    const hash = window.location.hash;
+    if (!hash.startsWith('#invite=')) return null;
+    return hash.replace('#invite=', '');
+  } catch {
+    return null;
+  }
 }

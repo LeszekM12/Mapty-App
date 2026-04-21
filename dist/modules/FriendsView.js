@@ -6,7 +6,7 @@
 //   - dodawanie znajomych przez link lub QR
 //   - live mapa wbudowana w zakładkę
 //   - polling statusu znajomych co 30s
-import { getAllFriends, addFriend, deleteFriend, generateInviteLink, parseInviteLink, checkInviteInUrl, } from './FriendsDB.js';
+import { getAllFriends, addFriend, deleteFriend, generateInviteLink, fetchInviteByCode, parseInviteLink, checkInviteInUrl, } from './FriendsDB.js';
 import { LiveMap } from './LiveMap.js';
 import { BACKEND_URL } from '../config.js';
 import { getUserName } from './LiveTracker.js';
@@ -37,11 +37,22 @@ export class FriendsView {
     // ── Init ───────────────────────────────────────────────────────────────────
     init() {
         // Sprawdź czy URL zawiera #invite= (ktoś wysłał link zaproszenia)
-        const invite = checkInviteInUrl();
-        if (invite) {
-            setTimeout(() => this._showAddFriendModal(invite.name, invite.pushSub), 500);
-            // Wyczyść hash z URL żeby nie pokazywać modalu przy każdym odświeżeniu
+        const inviteCode = checkInviteInUrl();
+        if (inviteCode) {
             history.replaceState(null, '', window.location.pathname);
+            setTimeout(async () => {
+                // Spróbuj pobrać z backendu (krótki kod)
+                const inv = await fetchInviteByCode(inviteCode, BACKEND_URL);
+                if (inv) {
+                    this._showAddFriendModal(inv.name, inv.pushSub);
+                }
+                else {
+                    // Fallback — stary base64 format
+                    const parsed = parseInviteLink(`#invite=${inviteCode}`);
+                    if (parsed)
+                        this._showAddFriendModal(parsed.name, parsed.pushSub);
+                }
+            }, 500);
         }
         // Sprawdź czy URL zawiera #live= (oglądanie trasy)
         const hash = window.location.hash;
@@ -154,10 +165,18 @@ export class FriendsView {
             this._showToast('Enable notifications first in Settings ⚙️');
             return;
         }
-        // 4. Wygeneruj link z imieniem + subskrypcją push
+        // 4. Wygeneruj KRÓTKI link przez backend (8 znaków zamiast 500)
         const name = getUserName();
         const subJson = sub.toJSON();
-        const link = generateInviteLink(name, subJson);
+        this._showToast('Generating link... ⏳');
+        let link;
+        try {
+            link = await generateInviteLink(name, subJson, BACKEND_URL);
+        }
+        catch {
+            this._showToast('Failed to generate link — check connection');
+            return;
+        }
         // 5. Web Share API (natywny sheet na iOS/Android) lub clipboard fallback
         try {
             if (navigator.share) {
@@ -173,7 +192,6 @@ export class FriendsView {
             }
         }
         catch (err) {
-            // Użytkownik anulował share sheet — nie traktuj jako błąd
             if (err.name !== 'AbortError') {
                 try {
                     await navigator.clipboard.writeText(link);
