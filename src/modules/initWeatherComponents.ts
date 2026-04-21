@@ -26,7 +26,7 @@ function updateBottomBar(data: WeatherData): void {
   const feels = document.getElementById('bnwFeels');
 
   if (loc)   loc.textContent   = data.location;
-  if (icon)  icon.textContent  = data.current.icon;
+  if (icon)  icon.innerHTML   = data.current.icon;   // innerHTML — icon may be an <img> SVG tag at night
   if (temp)  temp.textContent  = `${data.current.temp}°C`;
   if (desc)  desc.textContent  = data.current.description;
   if (feels) feels.textContent = `Feels ${data.current.feelsLike}°`;
