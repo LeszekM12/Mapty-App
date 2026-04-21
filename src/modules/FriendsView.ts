@@ -257,10 +257,27 @@ export class FriendsView {
 
       if (!prefillSub) {
         const input = modal.querySelector<HTMLInputElement>('#afLinkInput');
-        const parsed = parseInviteLink(input?.value.trim() ?? '');
-        if (!parsed) { alert('Invalid invite link'); return; }
-        name = parsed.name;
-        sub  = parsed.pushSub;
+        const raw   = input?.value.trim() ?? '';
+
+        // Wyodrębnij kod z URL lub użyj bezpośrednio
+        let code = raw;
+        try {
+          const hash = new URL(raw).hash;
+          if (hash.startsWith('#invite=')) code = hash.replace('#invite=', '');
+        } catch { /* raw nie jest pełnym URL — użyj jako kod */ }
+
+        // Spróbuj pobrać z backendu (krótki kod)
+        if (code.length <= 20) {
+          const inv = await fetchInviteByCode(code, BACKEND_URL);
+          if (inv) { name = inv.name; sub = inv.pushSub; }
+          else { alert('Invalid or expired invite link'); return; }
+        } else {
+          // Stary base64 format
+          const parsed = parseInviteLink(raw);
+          if (!parsed) { alert('Invalid invite link'); return; }
+          name = parsed.name;
+          sub  = parsed.pushSub;
+        }
       }
 
       if (!name || !sub) return;
