@@ -4,6 +4,7 @@
 
 import type { WeatherData } from './WeatherTypes.js';
 import { uvLabel } from './WeatherService.js';
+import { sunriseIcon, sunsetIcon } from './nightIcons.js';
 
 const MODAL_ID = 'weatherModal';
 
@@ -95,14 +96,14 @@ function buildModal(data: WeatherData): string {
     if (h.isSunset) return `
     <div class="wm-hourly__item wm-hourly__item--sunset">
       <span class="wm-hourly__time">${h.time}</span>
-      <span class="wm-hourly__icon">🌇</span>
-      <span class="wm-hourly__temp wm-hourly__sunset-lbl">Sunset</span>
+      <span class="wm-hourly__icon">${sunsetIcon()}</span>
+      <span class="wm-hourly__sun-lbl wm-hourly__sun-lbl--sunset">Sunset</span>
     </div>`;
-    if (h.isSunrise) return `
+    if ((h as {isSunrise?: boolean}).isSunrise) return `
     <div class="wm-hourly__item wm-hourly__item--sunrise">
       <span class="wm-hourly__time">${h.time}</span>
-      <span class="wm-hourly__icon">🌅</span>
-      <span class="wm-hourly__temp wm-hourly__sunrise-lbl">Sunrise</span>
+      <span class="wm-hourly__icon">${sunriseIcon()}</span>
+      <span class="wm-hourly__sun-lbl wm-hourly__sun-lbl--sunrise">Sunrise</span>
     </div>`;
     // icon is emoji string OR <img> SVG tag — both work in innerHTML
     const isImgIcon = h.icon.startsWith('<img');
@@ -193,13 +194,13 @@ function buildModal(data: WeatherData): string {
         <section class="wm-section">
           <h3 class="wm-section__title">Sunrise & Sunset</h3>
           <div class="wm-sun">
-            <span class="wm-sun__time wm-sun__time--rise">🌅 ${sun.sunrise}</span>
+            <span class="wm-sun__time wm-sun__time--rise">${sunriseIcon()} ${sun.sunrise}</span>
             <div class="wm-sun__bar">
               <div class="wm-sun__track">
                 <div class="wm-sun__dot" style="left:${pct}%"></div>
               </div>
             </div>
-            <span class="wm-sun__time wm-sun__time--set">🌇 ${sun.sunset}</span>
+            <span class="wm-sun__time wm-sun__time--set">${sunsetIcon()} ${sun.sunset}</span>
           </div>
         </section>
 
