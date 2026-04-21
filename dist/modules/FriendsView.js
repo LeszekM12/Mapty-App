@@ -73,7 +73,9 @@ export class FriendsView {
         document.getElementById('btnCloseLiveView')?.addEventListener('click', () => this._closeLiveView());
         // Renderuj listę
         void this.render();
-        // Polling statusu znajomych
+        // Od razu zweryfikuj statusy — nie czekaj 30s
+        void this._pollFriendsStatus();
+        // Polling statusu znajomych co 30s
         this._pollTimer = setInterval(() => void this._pollFriendsStatus(), STATUS_POLL_MS);
         // Odbieraj wiadomości z Service Workera (po kliknięciu powiadomienia)
         navigator.serviceWorker.addEventListener('message', (e) => {
@@ -358,23 +360,21 @@ export class FriendsView {
         let changed = false;
         for (const f of friends) {
             try {
-                if (f.liveToken) {
-                    // Sprawdź czy aktywna sesja nadal trwa
-                    const res = await fetch(`${BACKEND_URL}/live/status/${f.liveToken}`);
-                    const data = await res.json();
-                    if (data.session === 'finished' || data.session === 'not_found') {
-                        await updateFriendLiveToken(f.subscriptionId, null);
+                // Zawsze sprawdzaj przez backend — nigdy nie ufaj samemu IndexedDB
+                const ep = encodeURIComponent(f.subscriptionId);
+                const res = await fetch(`${BACKEND_URL}/live/active/${ep}`);
+                const data = await res.json();
+                if (data.active && data.token) {
+                    // Znajomy ma aktywny trening — zapisz/odśwież token
+                    if (f.liveToken !== data.token) {
+                        await updateFriendLiveToken(f.subscriptionId, data.token);
                         changed = true;
                     }
                 }
                 else {
-                    // Sprawdź czy znajomy właśnie zaczął trening
-                    // Używamy jego endpoint jako klucza
-                    const ep = encodeURIComponent(f.subscriptionId);
-                    const res = await fetch(`${BACKEND_URL}/live/active/${ep}`);
-                    const data = await res.json();
-                    if (data.active && data.token) {
-                        await updateFriendLiveToken(f.subscriptionId, data.token);
+                    // Brak aktywnego treningu — wyczyść token jeśli był
+                    if (f.liveToken) {
+                        await updateFriendLiveToken(f.subscriptionId, null);
                         changed = true;
                     }
                 }
