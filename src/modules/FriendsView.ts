@@ -9,7 +9,7 @@
 
 import {
   getAllFriends, addFriend, deleteFriend,
-  generateInviteLink, parseInviteLink, checkInviteInUrl,
+  generateInviteLink, fetchInviteByCode, parseInviteLink, checkInviteInUrl,
   type Friend,
 } from './FriendsDB.js';
 import { LiveMap, type LiveData } from './LiveMap.js';
@@ -31,11 +31,20 @@ export class FriendsView {
 
   init(): void {
     // Sprawdź czy URL zawiera #invite= (ktoś wysłał link zaproszenia)
-    const invite = checkInviteInUrl();
-    if (invite) {
-      setTimeout(() => this._showAddFriendModal(invite.name, invite.pushSub), 500);
-      // Wyczyść hash z URL żeby nie pokazywać modalu przy każdym odświeżeniu
+    const inviteCode = checkInviteInUrl();
+    if (inviteCode) {
       history.replaceState(null, '', window.location.pathname);
+      setTimeout(async () => {
+        // Spróbuj pobrać z backendu (krótki kod)
+        const inv = await fetchInviteByCode(inviteCode, BACKEND_URL);
+        if (inv) {
+          this._showAddFriendModal(inv.name, inv.pushSub);
+        } else {
+          // Fallback — stary base64 format
+          const parsed = parseInviteLink(`#invite=${inviteCode}`);
+          if (parsed) this._showAddFriendModal(parsed.name, parsed.pushSub);
+        }
+      }, 500);
     }
 
     // Sprawdź czy URL zawiera #live= (oglądanie trasy)
@@ -163,10 +172,18 @@ export class FriendsView {
       return;
     }
 
-    // 4. Wygeneruj link z imieniem + subskrypcją push
+    // 4. Wygeneruj KRÓTKI link przez backend (8 znaków zamiast 500)
     const name    = getUserName();
     const subJson = sub.toJSON() as Friend['pushSub'];
-    const link    = generateInviteLink(name, subJson);
+
+    this._showToast('Generating link... ⏳');
+    let link: string;
+    try {
+      link = await generateInviteLink(name, subJson, BACKEND_URL);
+    } catch {
+      this._showToast('Failed to generate link — check connection');
+      return;
+    }
 
     // 5. Web Share API (natywny sheet na iOS/Android) lub clipboard fallback
     try {
@@ -181,7 +198,6 @@ export class FriendsView {
         this._showToast('Invite link copied! 📋');
       }
     } catch (err) {
-      // Użytkownik anulował share sheet — nie traktuj jako błąd
       if ((err as Error).name !== 'AbortError') {
         try {
           await navigator.clipboard.writeText(link);
