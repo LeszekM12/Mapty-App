@@ -93,7 +93,7 @@ export class LiveMap {
   private async _poll(): Promise<void> {
     if (!this._token || !this._map) return;
     try {
-      const res  = await fetch(`${BACKEND_URL}/live/${this._token}`);
+      const res  = await fetch(`${BACKEND_URL}/live/status/${this._token}`);
       if (!res.ok) {
         this._onStatus?.({ token: this._token, userName: '?', session: 'not_found', startedAt: 0, updatedAt: 0, current: null, history: [] });
         return;

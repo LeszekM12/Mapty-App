@@ -27,12 +27,24 @@ export class FriendsView {
             writable: true,
             value: null
         });
+        Object.defineProperty(this, "_clockTimer", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: null
+        });
         Object.defineProperty(this, "_watchingId", {
             enumerable: true,
             configurable: true,
             writable: true,
             value: null
-        }); // id znajomego którego oglądamy
+        });
+        Object.defineProperty(this, "_lastLiveData", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: null
+        });
     }
     // ── Init ───────────────────────────────────────────────────────────────────
     init() {
@@ -333,8 +345,34 @@ export class FriendsView {
         panel?.classList.add('hidden');
         this._liveMap.stop();
         this._watchingId = null;
+        this._lastLiveData = null;
+        this._stopClock();
     }
     _onLiveUpdate(data) {
+        this._lastLiveData = data;
+        this._renderStatus(data);
+        if (data.session === 'finished') {
+            this._stopClock();
+            setTimeout(() => this._closeLiveView(), 3000);
+        }
+        else if (data.session === 'running' && !this._clockTimer) {
+            // Tykaj co sekundę żeby czas był na bieżąco
+            this._clockTimer = setInterval(() => {
+                if (this._lastLiveData)
+                    this._renderStatus(this._lastLiveData);
+            }, 1000);
+        }
+        else if (data.session === 'paused') {
+            this._stopClock();
+        }
+    }
+    _stopClock() {
+        if (this._clockTimer) {
+            clearInterval(this._clockTimer);
+            this._clockTimer = null;
+        }
+    }
+    _renderStatus(data) {
         const statusEl = document.getElementById('friendsLiveStatus');
         if (!statusEl)
             return;
@@ -352,9 +390,6 @@ export class FriendsView {
       <span class="fls-status">${statusMap[data.session] ?? data.session}</span>
       <span class="fls-meta">${elapsed} min · ${speed} km/h</span>
     `;
-        if (data.session === 'finished') {
-            setTimeout(() => this._closeLiveView(), 3000);
-        }
     }
     // ── Poll friends status ───────────────────────────────────────────────────
     async _pollFriendsStatus() {

@@ -23,9 +23,11 @@ const STATUS_POLL_MS = 30_000;   // sprawdzaj status znajomych co 30s
 // ── FriendsView class ─────────────────────────────────────────────────────────
 
 export class FriendsView {
-  private _liveMap:    LiveMap     = new LiveMap();
-  private _pollTimer:  ReturnType<typeof setInterval> | null = null;
-  private _watchingId: number | null = null;   // id znajomego którego oglądamy
+  private _liveMap:      LiveMap     = new LiveMap();
+  private _pollTimer:    ReturnType<typeof setInterval> | null = null;
+  private _clockTimer:   ReturnType<typeof setInterval> | null = null;
+  private _watchingId:   number | null = null;
+  private _lastLiveData: LiveData | null = null;
 
   // ── Init ───────────────────────────────────────────────────────────────────
 
@@ -347,9 +349,32 @@ export class FriendsView {
     panel?.classList.add('hidden');
     this._liveMap.stop();
     this._watchingId = null;
+    this._lastLiveData = null;
+    this._stopClock();
   }
 
   private _onLiveUpdate(data: LiveData): void {
+    this._lastLiveData = data;
+    this._renderStatus(data);
+
+    if (data.session === 'finished') {
+      this._stopClock();
+      setTimeout(() => this._closeLiveView(), 3000);
+    } else if (data.session === 'running' && !this._clockTimer) {
+      // Tykaj co sekundę żeby czas był na bieżąco
+      this._clockTimer = setInterval(() => {
+        if (this._lastLiveData) this._renderStatus(this._lastLiveData);
+      }, 1000);
+    } else if (data.session === 'paused') {
+      this._stopClock();
+    }
+  }
+
+  private _stopClock(): void {
+    if (this._clockTimer) { clearInterval(this._clockTimer); this._clockTimer = null; }
+  }
+
+  private _renderStatus(data: LiveData): void {
     const statusEl = document.getElementById('friendsLiveStatus');
     if (!statusEl) return;
 
@@ -369,10 +394,6 @@ export class FriendsView {
       <span class="fls-status">${statusMap[data.session] ?? data.session}</span>
       <span class="fls-meta">${elapsed} min · ${speed} km/h</span>
     `;
-
-    if (data.session === 'finished') {
-      setTimeout(() => this._closeLiveView(), 3000);
-    }
   }
 
   // ── Poll friends status ───────────────────────────────────────────────────
