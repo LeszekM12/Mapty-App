@@ -13,15 +13,29 @@ self.addEventListener('push', event => {
     try   { data = { ...data, ...event.data.json() }; }
     catch { data.body = event.data.text(); }
   }
+
+  // Natychmiast powiadom otwarte okna apki o live URL — bez czekania na kliknięcie
+  const notifyClients = clients.matchAll({ type: 'window', includeUncontrolled: true })
+    .then(list => {
+      for (const client of list) {
+        if (data.url && data.url.includes('#live=')) {
+          client.postMessage({ type: 'OPEN_LIVE', url: data.url, silent: true });
+        }
+      }
+    });
+
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body:    data.body,
-      icon:    data.icon  ?? './public/icon-192.png',
-      badge:   data.badge ?? './public/icon-192.png',
-      data:    { url: data.url ?? '/' },
-      vibrate: [200, 100, 200],
-      requireInteraction: false,
-    })
+    Promise.all([
+      notifyClients,
+      self.registration.showNotification(data.title, {
+        body:    data.body,
+        icon:    data.icon  ?? './public/icon-192.png',
+        badge:   data.badge ?? './public/icon-192.png',
+        data:    { url: data.url ?? '/' },
+        vibrate: [200, 100, 200],
+        requireInteraction: false,
+      }),
+    ])
   );
 });
 

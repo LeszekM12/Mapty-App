@@ -89,10 +89,17 @@ export class FriendsView {
         void this._pollFriendsStatus();
         // Polling statusu znajomych co 30s
         this._pollTimer = setInterval(() => void this._pollFriendsStatus(), STATUS_POLL_MS);
-        // Odbieraj wiadomości z Service Workera (po kliknięciu powiadomienia)
+        // Odbieraj wiadomości z Service Workera
         navigator.serviceWorker.addEventListener('message', (e) => {
             if (e.data?.type === 'OPEN_LIVE') {
-                void this._handleLivePushUrl(e.data.url);
+                if (e.data.silent) {
+                    // Cicha aktualizacja — tylko zapisz token i odśwież listę (bez otwierania live)
+                    void this._saveLiveTokenFromUrl(e.data.url);
+                }
+                else {
+                    // Kliknięcie powiadomienia — otwórz live panel
+                    void this._handleLivePushUrl(e.data.url);
+                }
             }
         });
     }
@@ -397,23 +404,24 @@ export class FriendsView {
         let changed = false;
         for (const f of friends) {
             try {
-                // Zawsze sprawdzaj przez backend — nigdy nie ufaj samemu IndexedDB
+                // Jeśli znajomy ma już zapisany token — weryfikuj przez /live/status/:token
+                if (f.liveToken) {
+                    const res = await fetch(`${BACKEND_URL}/live/status/${f.liveToken}`);
+                    const data = await res.json();
+                    if (!res.ok || data.session === 'finished' || data.session === 'not_found' || !data.session) {
+                        await updateFriendLiveToken(f.subscriptionId, null);
+                        changed = true;
+                    }
+                    // Token nadal aktywny — nic nie rób, przycisk Watch zostaje
+                    continue;
+                }
+                // Brak tokenu — sprawdź czy znajomy właśnie zaczął trening przez /live/active/:endpoint
                 const ep = encodeURIComponent(f.subscriptionId);
                 const res = await fetch(`${BACKEND_URL}/live/active/${ep}`);
                 const data = await res.json();
                 if (data.active && data.token) {
-                    // Znajomy ma aktywny trening — zapisz/odśwież token
-                    if (f.liveToken !== data.token) {
-                        await updateFriendLiveToken(f.subscriptionId, data.token);
-                        changed = true;
-                    }
-                }
-                else {
-                    // Brak aktywnego treningu — wyczyść token jeśli był
-                    if (f.liveToken) {
-                        await updateFriendLiveToken(f.subscriptionId, null);
-                        changed = true;
-                    }
+                    await updateFriendLiveToken(f.subscriptionId, data.token);
+                    changed = true;
                 }
             }
             catch { /* ignoruj */ }
@@ -422,6 +430,28 @@ export class FriendsView {
             void this.render();
     }
     // ── Handle live push URL ─────────────────────────────────────────────────
+    /** Cicha aktualizacja — tylko zapisz token i odśwież przycisk Watch, bez otwierania live */
+    async _saveLiveTokenFromUrl(url) {
+        let token = '';
+        try {
+            token = new URL(url).hash.replace('#live=', '');
+        }
+        catch {
+            if (url.includes('#live='))
+                token = url.split('#live=')[1];
+        }
+        if (!token)
+            return;
+        const friends = await getAllFriends();
+        let friend = friends.find(f => f.liveToken === token);
+        if (!friend) {
+            friend = friends[0];
+            if (friend) {
+                await updateFriendLiveToken(friend.subscriptionId, token);
+                void this.render();
+            }
+        }
+    }
     async _handleLivePushUrl(url) {
         // Wyciągnij token z URL: #live=TOKEN
         let token = '';
