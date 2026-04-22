@@ -324,7 +324,9 @@ export class FriendsView {
         if (title)
             title.textContent = `${name}'s Route`;
         this._liveMap.watch(token);
-        setTimeout(() => this._liveMap.invalidateSize(), 100);
+        // Invalidate twice — once immediately, once after CSS transition settles
+        this._liveMap.invalidateSize();
+        setTimeout(() => this._liveMap.invalidateSize(), 300);
     }
     _closeLiveView() {
         const panel = document.getElementById('friendsLivePanel');

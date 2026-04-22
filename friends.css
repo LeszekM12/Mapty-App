@@ -199,13 +199,14 @@
 /* ── Live panel ─────────────────────────────────────────────────────────────── */
 
 .fls-panel {
-  position:   fixed;
-  inset:      0;
-  bottom:     5.8rem;
-  z-index:    150;
-  background: var(--f-bg);
-  display:    flex;
+  position:       fixed;
+  inset:          0;
+  bottom:         5.8rem;
+  z-index:        250;          /* above tab-panel (50) and bottom-nav (200) */
+  background:     var(--f-bg);
+  display:        flex;
   flex-direction: column;
+  pointer-events: all;          /* panel is fixed — must override parent pointer-events:none */
 }
 .fls-panel.hidden { display: none; }
 

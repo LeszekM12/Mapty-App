@@ -129,7 +129,7 @@ export class LiveMap {
         if (data.current) {
             const pos = L.latLng(data.current.lat, data.current.lng);
             if (!this._marker) {
-                // Utwórz marker przy pierwszej pozycji
+                // Utwórz marker przy pierwszej pozycji i od razu centruj mapę
                 this._marker = L.circleMarker(pos, {
                     radius: 10,
                     color: '#fff',
@@ -137,6 +137,8 @@ export class LiveMap {
                     fillOpacity: 1,
                     weight: 3,
                 }).addTo(this._map);
+                // Zawsze centruj na pierwszej pozycji znajomego
+                this._map.setView(pos, 16, { animate: true });
             }
             else {
                 this._marker.setLatLng(pos);
@@ -146,8 +148,8 @@ export class LiveMap {
                 this._map.panTo(pos, { animate: true, duration: 0.8 });
             }
         }
-        // Dopasuj widok do trasy jeśli jest historia
-        if (latLngs.length > 1 && !this._marker) {
+        // Dopasuj widok do trasy jeśli jest historia i brak aktualnej pozycji
+        if (latLngs.length > 1 && !data.current) {
             this._map.fitBounds(this._polyline.getBounds(), { padding: [40, 40] });
         }
     }
