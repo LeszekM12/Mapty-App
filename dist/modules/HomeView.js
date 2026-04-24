@@ -271,8 +271,7 @@ function buildCard(act) {
     // ── Wire actions — stopPropagation prevents workout form from opening ──────
     card.querySelectorAll('.home-card__action').forEach(btn => {
         btn.addEventListener('click', e => {
-            e.stopPropagation();
-            e.preventDefault();
+            e.stopPropagation(); // prevent Leaflet map click, but NOT preventDefault (breaks buttons)
             const action = btn.dataset.action;
             if (action === 'like') {
                 const liked = btn.classList.toggle('home-card__action--liked');
@@ -349,6 +348,25 @@ export class HomeView {
         if (!this.container)
             return;
         this._inited = true;
+        // ── Block map-click passthrough at the tab container level ────────────────
+        // Only stopPropagation on the *container* itself — NOT on children
+        // (children handle their own events normally).
+        const tabEl = document.getElementById('tabHome');
+        if (tabEl) {
+            // Use capture:false so buttons get the event first, then we stop it here
+            tabEl.addEventListener('click', (e) => {
+                if (tabEl.classList.contains('tab-panel--active')) {
+                    e.stopPropagation();
+                    // Do NOT preventDefault — that would break button clicks
+                }
+            }, false);
+            // Also block touchend which Leaflet uses to synthesise map clicks
+            tabEl.addEventListener('touchend', (e) => {
+                if (tabEl.classList.contains('tab-panel--active')) {
+                    e.stopPropagation();
+                }
+            }, { passive: true });
+        }
         void this.render();
     }
     async render() {
@@ -382,7 +400,6 @@ export class HomeView {
             const card = buildCard(act);
             card.style.animationDelay = `${idx * 60}ms`;
             // IMPORTANT: block ALL clicks from bubbling to the app-level map click handler
-            card.addEventListener('click', e => { e.stopPropagation(); e.preventDefault(); });
             scroll.appendChild(card);
             requestAnimationFrame(() => {
                 setTimeout(() => {
@@ -392,8 +409,6 @@ export class HomeView {
                 }, 80 + idx * 30);
             });
         });
-        // Block scroll container clicks too
-        scroll.addEventListener('click', e => e.stopPropagation(), { capture: true });
     }
     switchToHome() {
         const btn = document.querySelector('.bottom-nav__item[data-tab="tabHome"]');

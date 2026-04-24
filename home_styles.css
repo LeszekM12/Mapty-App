@@ -8,15 +8,22 @@
   flex-direction: column;
   height: 100%;
   background: var(--color-dark--1, #2d3439);
+  /* When inactive: pass-through (same as other panels) */
+  pointer-events: none !important;
 }
 #tabHome.tab-panel--active {
   display: flex;
+  /* When active: BLOCK all pointer events — prevent clicks reaching Leaflet map */
+  pointer-events: all !important;
 }
 #tabHome .home-scroll {
   flex: 1;
   overflow-y: auto;
   padding: 0 0 100px;
   -webkit-overflow-scrolling: touch;
+  pointer-events: all !important;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
 }
 
 /* ── Greeting ── */
@@ -868,12 +875,51 @@
    FIXES: prevent card click from triggering workout form
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* The home scroll must NOT propagate pointer events to the app map underneath */
-#tabHome { isolation: isolate; }
-#tabHome .home-scroll {
-  /* make sure touch events don't pass through */
-  touch-action: pan-y;
+/* ── Core fix: tab container blocks pass-through when active ── */
+#tabHome.tab-panel--active {
+  pointer-events: all !important;
 }
+/* Scroll area is interactive */
+#tabHome.tab-panel--active .home-scroll {
+  pointer-events: all !important;
+}
+/* Cards are interactive */
+#tabHome.tab-panel--active .home-card {
+  pointer-events: all !important;
+}
+/* All buttons/inputs inside cards are clickable */
+#tabHome.tab-panel--active .home-card button,
+#tabHome.tab-panel--active .home-card input,
+#tabHome.tab-panel--active .home-card textarea,
+#tabHome.tab-panel--active .home-card a,
+#tabHome.tab-panel--active .home-card img,
+#tabHome.tab-panel--active .home-card__action,
+#tabHome.tab-panel--active .home-card__footer,
+#tabHome.tab-panel--active .home-card__comment-panel,
+#tabHome.tab-panel--active .home-card__share-panel,
+#tabHome.tab-panel--active .hcc__form,
+#tabHome.tab-panel--active .hcc__input,
+#tabHome.tab-panel--active .hcc__send,
+#tabHome.tab-panel--active .hcs__opt {
+  pointer-events: all !important;
+}
+/* Leaflet panes inside mini-maps: disable so they don't swallow taps meant for buttons */
+#tabHome .home-card__map-wrap .leaflet-pane,
+#tabHome .home-card__map-wrap .leaflet-overlay-pane,
+#tabHome .home-card__map-wrap .leaflet-marker-pane,
+#tabHome .home-card__map-wrap .leaflet-map-pane,
+#tabHome .home-card__map-wrap .leaflet-tile-pane,
+#tabHome .home-card__map-wrap .leaflet-tile-container,
+#tabHome .home-card__map-wrap canvas,
+#tabHome .home-card__map-wrap svg {
+  pointer-events: none !important;
+}
+/* When inactive — never intercept anything */
+#tabHome:not(.tab-panel--active),
+#tabHome:not(.tab-panel--active) * {
+  pointer-events: none !important;
+}
+#tabHome { isolation: isolate; }
 
 /* Photo: full-width, no tap-to-expand weirdness */
 .home-card__photo {

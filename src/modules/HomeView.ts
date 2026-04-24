@@ -296,8 +296,7 @@ function buildCard(act: EnrichedActivity): HTMLElement {
   // ── Wire actions — stopPropagation prevents workout form from opening ──────
   card.querySelectorAll<HTMLElement>('.home-card__action').forEach(btn => {
     btn.addEventListener('click', e => {
-      e.stopPropagation();
-      e.preventDefault();
+      e.stopPropagation(); // prevent Leaflet map click, but NOT preventDefault (breaks buttons)
       const action = btn.dataset.action;
 
       if (action === 'like') {
@@ -365,6 +364,27 @@ export class HomeView {
     this.container = document.querySelector('#tabHome .home-scroll');
     if (!this.container) return;
     this._inited = true;
+
+    // ── Block map-click passthrough at the tab container level ────────────────
+    // Only stopPropagation on the *container* itself — NOT on children
+    // (children handle their own events normally).
+    const tabEl = document.getElementById('tabHome');
+    if (tabEl) {
+      // Use capture:false so buttons get the event first, then we stop it here
+      tabEl.addEventListener('click', (e: Event) => {
+        if (tabEl.classList.contains('tab-panel--active')) {
+          e.stopPropagation();
+          // Do NOT preventDefault — that would break button clicks
+        }
+      }, false);
+      // Also block touchend which Leaflet uses to synthesise map clicks
+      tabEl.addEventListener('touchend', (e: Event) => {
+        if (tabEl.classList.contains('tab-panel--active')) {
+          e.stopPropagation();
+        }
+      }, { passive: true });
+    }
+
     void this.render();
   }
 
@@ -403,7 +423,6 @@ export class HomeView {
       const card = buildCard(act);
       card.style.animationDelay = `${idx * 60}ms`;
       // IMPORTANT: block ALL clicks from bubbling to the app-level map click handler
-      card.addEventListener('click', e => { e.stopPropagation(); e.preventDefault(); });
       scroll.appendChild(card);
 
       requestAnimationFrame(() => {
@@ -414,8 +433,7 @@ export class HomeView {
       });
     });
 
-    // Block scroll container clicks too
-    scroll.addEventListener('click', e => e.stopPropagation(), { capture: true });
+
   }
 
   switchToHome(): void {
