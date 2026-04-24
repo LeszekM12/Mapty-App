@@ -567,6 +567,11 @@ class App {
     }
     // ── MAP CLICK ─────────────────────────────────────────────────────────────
     _handleMapClick(mapE) {
+        // Never open workout form when Home tab or Friends tab is active —
+        // clicks there should not fall through to the map handler.
+        const activeTab = document.querySelector('.tab-panel--active');
+        if (activeTab && (activeTab.id === 'tabHome' || activeTab.id === 'tabFriends'))
+            return;
         __classPrivateFieldSet(this, _App_pinnedCoord, [mapE.latlng.lat, mapE.latlng.lng], "f");
         if (__classPrivateFieldGet(this, _App_routeMode, "f") && __classPrivateFieldGet(this, _App_routeStep, "f") < 3)
             this._handleRouteClick(mapE);

@@ -589,6 +589,11 @@ class App {
   // ── MAP CLICK ─────────────────────────────────────────────────────────────
 
   _handleMapClick(mapE: L.LeafletMouseEvent): void {
+    // Never open workout form when Home tab or Friends tab is active —
+    // clicks there should not fall through to the map handler.
+    const activeTab = document.querySelector('.tab-panel--active');
+    if (activeTab && (activeTab.id === 'tabHome' || activeTab.id === 'tabFriends')) return;
+
     this.#pinnedCoord = [mapE.latlng.lat, mapE.latlng.lng];
     if (this.#routeMode && this.#routeStep < 3) this._handleRouteClick(mapE);
     else this._showForm(mapE);
