@@ -184,9 +184,15 @@ export class FriendsView {
       console.warn('[FriendsView] getSubscription error:', err);
     }
 
-    // 3. Brak subskrypcji — poinformuj użytkownika
+    // 3. Brak subskrypcji push — użyj prostego linku z userId (bez push notyfikacji)
     if (!sub) {
-      this._showToast('Enable notifications first in Settings ⚙️');
+      const userId = localStorage.getItem('mapyou_userId_profile') ?? localStorage.getItem('mapty_userId');
+      const name   = getUserName();
+      const base   = window.location.href.split('#')[0];
+      const link   = userId
+        ? `${base}#invite-user=${userId}`
+        : base;
+      this._copyOrShareLink(link, name);
       return;
     }
 
@@ -495,6 +501,18 @@ export class FriendsView {
   }
 
   // ── Toast ──────────────────────────────────────────────────────────────────
+
+  private _copyOrShareLink(link: string, name: string): void {
+    if (navigator.share) {
+      void navigator.share({ title: `Add ${name} on MapYou`, url: link });
+    } else {
+      void navigator.clipboard.writeText(link).then(() => {
+        this._showToast('Link copied! 📋');
+      }).catch(() => {
+        this._showToast(link);
+      });
+    }
+  }
 
   private _showToast(msg: string): void {
     const t = document.createElement('div');
