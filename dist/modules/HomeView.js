@@ -4,6 +4,9 @@ import { loadEnrichedActivities } from './db.js';
 import { SPORT_COLORS, SPORT_ICONS, formatDuration, formatPace, formatDistance } from './Tracker.js';
 import { generateShareImageFromEnriched } from './ShareImage.js';
 import { openProfileModal, loadProfileFromLocal } from './UserProfile.js';
+import { openPostModal } from './PostModal.js';
+import { openSaveActivityModal } from './SaveActivityModal.js';
+import { loadPosts } from './db.js';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function relativeDate(timestamp) {
     const diff = Date.now() - timestamp;
@@ -210,6 +213,94 @@ function openLightbox(src) {
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape')
         close(); }, { once: true });
 }
+// ── Post card builder ─────────────────────────────────────────────────────────
+function buildPostCard(post) {
+    const card = document.createElement('article');
+    card.className = 'home-card home-card--post';
+    card.dataset.id = post.id;
+    const avatarHtml = post.avatarB64
+        ? `<img src="${post.avatarB64}" class="home-card__avatar-img" alt="avatar"/>`
+        : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="22" height="22"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>`;
+    const photoHtml = post.photoUrl
+        ? `<div class="home-card__photo" data-photosrc="${post.photoUrl}"><img src="${post.photoUrl}" alt="" loading="lazy"/></div>`
+        : '';
+    card.innerHTML = `
+    <div class="home-card__header">
+      <div class="home-card__avatar home-card__avatar--user">${avatarHtml}</div>
+      <div class="home-card__meta">
+        <h3 class="home-card__name">${post.authorName}</h3>
+        <span class="home-card__time">${relativeDate(post.date)}</span>
+      </div>
+      <span class="home-card__post-badge">Post</span>
+    </div>
+
+    ${post.title ? `<h4 class="home-card__post-title">${post.title}</h4>` : ''}
+    ${post.body ? `<p class="home-card__desc">${post.body}</p>` : ''}
+
+    ${photoHtml}
+
+    <div class="home-card__footer" style="border-top:1px solid rgba(255,255,255,0.06)">
+      <button class="home-card__action home-card__action--like" data-action="like" aria-label="Like">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+        </svg>
+        <span class="home-card__action-count" data-like-count="p_${post.id}">0</span>
+      </button>
+      <button class="home-card__action home-card__action--comment" data-action="comment" aria-label="Comment">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span class="home-card__action-count" data-comment-count="p_${post.id}">0</span>
+      </button>
+    </div>`;
+    // Wire like
+    card.querySelector('[data-action="like"]')?.addEventListener('click', e => {
+        e.stopPropagation();
+        const btn = e.currentTarget;
+        const liked = btn.classList.toggle('home-card__action--liked');
+        const lsKey = `hc_likes_p_${post.id}`;
+        const next = Math.max(0, parseInt(localStorage.getItem(lsKey) ?? '0', 10) + (liked ? 1 : -1));
+        localStorage.setItem(lsKey, String(next));
+        const el = card.querySelector(`[data-like-count="p_${post.id}"]`);
+        if (el)
+            el.textContent = String(next);
+        btn.classList.add('home-card__action--pulse');
+        setTimeout(() => btn.classList.remove('home-card__action--pulse'), 400);
+    });
+    // Wire comment
+    card.querySelector('[data-action="comment"]')?.addEventListener('click', e => {
+        e.stopPropagation();
+        const existing = card.querySelector('.home-card__comment-panel');
+        if (existing) {
+            existing.classList.remove('home-card__comment-panel--open');
+            setTimeout(() => existing.remove(), 280);
+        }
+        else {
+            openCommentPanel(card, `p_${post.id}`);
+        }
+    });
+    // Wire photo lightbox
+    const photoEl = card.querySelector('.home-card__photo[data-photosrc]');
+    if (photoEl) {
+        photoEl.addEventListener('click', e => {
+            e.stopPropagation();
+            const src = photoEl.dataset.photosrc;
+            if (src)
+                openLightbox(src);
+        });
+    }
+    // Restore like count
+    const lsKey = `hc_likes_p_${post.id}`;
+    const lc = parseInt(localStorage.getItem(lsKey) ?? '0', 10);
+    if (lc > 0) {
+        const el = card.querySelector(`[data-like-count="p_${post.id}"]`);
+        if (el)
+            el.textContent = String(lc);
+        card.querySelector('.home-card__action--like')?.classList.add('home-card__action--liked');
+    }
+    card.addEventListener('click', e => { e.stopPropagation(); });
+    return card;
+}
 // ── Card builder ──────────────────────────────────────────────────────────────
 function buildCard(act) {
     const card = document.createElement('article');
@@ -404,6 +495,80 @@ export class HomeView {
             }, { passive: true });
         }
         void this.render();
+        this._mountFAB();
+    }
+    _mountFAB() {
+        // Remove if already exists
+        document.getElementById('homeFAB')?.remove();
+        const fab = document.createElement('div');
+        fab.id = 'homeFAB';
+        fab.innerHTML = `
+      <div class="home-fab__menu" id="homeFABMenu">
+        <button class="home-fab__option" id="fabOptPost">
+          <span class="home-fab__option-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 1 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+          </span>
+          <span class="home-fab__option-label">Post</span>
+        </button>
+        <button class="home-fab__option" id="fabOptActivity">
+          <span class="home-fab__option-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </span>
+          <span class="home-fab__option-label">Add activity</span>
+        </button>
+      </div>
+      <button class="home-fab__btn" id="homeFABBtn" aria-label="Create">
+        <svg class="home-fab__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="24" height="24">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </button>`;
+        const tabEl = document.getElementById('tabHome');
+        tabEl?.appendChild(fab);
+        const btn = fab.querySelector('#homeFABBtn');
+        const menu = fab.querySelector('#homeFABMenu');
+        const toggleMenu = (open) => {
+            fab.classList.toggle('home-fab--open', open);
+            btn.setAttribute('aria-expanded', String(open));
+        };
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            toggleMenu(!fab.classList.contains('home-fab--open'));
+        });
+        // Post option
+        fab.querySelector('#fabOptPost')?.addEventListener('click', e => {
+            e.stopPropagation();
+            toggleMenu(false);
+            openPostModal(async () => {
+                await this.render();
+            });
+        });
+        // Add activity option — opens SaveActivityModal with empty/manual activity
+        fab.querySelector('#fabOptActivity')?.addEventListener('click', e => {
+            e.stopPropagation();
+            toggleMenu(false);
+            const manualActivity = {
+                id: String(Date.now()),
+                sport: 'running',
+                date: new Date().toISOString(),
+                distanceKm: 0,
+                durationSec: 0,
+                paceMinKm: 0,
+                speedKmH: 0,
+                coords: [],
+                description: '',
+            };
+            openSaveActivityModal(manualActivity, async () => { await this.render(); }, undefined);
+        });
+        // Close menu on outside click
+        document.addEventListener('click', (e) => {
+            if (!fab.contains(e.target))
+                toggleMenu(false);
+        });
     }
     _buildGreeting(activityCount) {
         const greeting = document.createElement('div');
@@ -439,32 +604,46 @@ export class HomeView {
         if (!scroll)
             return;
         scroll.innerHTML = '<div class="home-loading"><div class="home-loading__spinner"></div></div>';
-        const activities = await loadEnrichedActivities();
+        const [activities, posts] = await Promise.all([
+            loadEnrichedActivities(),
+            loadPosts(),
+        ]);
         scroll.innerHTML = '';
         // Greeting always rendered — regardless of activity count
-        scroll.appendChild(this._buildGreeting(activities.length));
-        if (activities.length === 0) {
+        scroll.appendChild(this._buildGreeting(activities.length + posts.length));
+        const feed = [
+            ...activities.map(a => ({ kind: 'activity', date: a.date, data: a })),
+            ...posts.map(p => ({ kind: 'post', date: p.date, data: p })),
+        ].sort((a, b) => b.date - a.date);
+        if (feed.length === 0) {
             const empty = document.createElement('div');
             empty.className = 'home-empty';
             empty.innerHTML = `
         <div class="home-empty__icon">🏃</div>
-        <h3 class="home-empty__title">No activities yet</h3>
-        <p class="home-empty__sub">Finish your first workout to see it here</p>`;
+        <h3 class="home-empty__title">Nothing here yet</h3>
+        <p class="home-empty__sub">Finish a workout or tap + to create a post</p>`;
             scroll.appendChild(empty);
             return;
         }
-        activities.forEach((act, idx) => {
-            const card = buildCard(act);
+        feed.forEach((item, idx) => {
+            let card;
+            if (item.kind === 'activity') {
+                card = buildCard(item.data);
+            }
+            else {
+                card = buildPostCard(item.data);
+            }
             card.style.animationDelay = `${idx * 60}ms`;
-            // IMPORTANT: block ALL clicks from bubbling to the app-level map click handler
             scroll.appendChild(card);
-            requestAnimationFrame(() => {
-                setTimeout(() => {
-                    const mapEl = document.getElementById(`hcmap-${act.id}`);
-                    if (mapEl)
-                        renderMiniMap(mapEl, act.coords, act.sport);
-                }, 80 + idx * 30);
-            });
+            if (item.kind === 'activity') {
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        const mapEl = document.getElementById(`hcmap-${item.data.id}`);
+                        if (mapEl)
+                            renderMiniMap(mapEl, item.data.coords, item.data.sport);
+                    }, 80 + idx * 30);
+                });
+            }
         });
     }
     switchToHome() {
