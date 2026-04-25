@@ -166,13 +166,10 @@ export class FriendsView {
   // ── Share my invite link ───────────────────────────────────────────────────
 
   private async _shareMyLink(): Promise<void> {
-    // 1. Sprawdź czy push jest obsługiwany
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      this._showToast('Push notifications not supported on this device');
-      return;
-    }
+    const name = getUserName();
+    const base = window.location.href.split('#')[0];
 
-    // 2. Znajdź subskrypcję — przeszukaj WSZYSTKIE rejestracje SW
+    // 1. Znajdź push subskrypcję (opcjonalna — bez niej link działa, brak powiadomień)
     let sub: PushSubscription | null = null;
     try {
       const regs = await navigator.serviceWorker.getRegistrations();
@@ -180,36 +177,34 @@ export class FriendsView {
         sub = await reg.pushManager.getSubscription();
         if (sub) break;
       }
-    } catch (err) {
-      console.warn('[FriendsView] getSubscription error:', err);
+    } catch { /* ignoruj — push niedostępny */ }
+
+    // 2. Spróbuj wygenerować krótki link przez backend (gdy push sub jest dostępna)
+    let link: string | null = null;
+    if (sub) {
+      try {
+        const subJson = sub.toJSON() as Friend['pushSub'];
+        link = await generateInviteLink(name, subJson, BACKEND_URL);
+      } catch {
+        console.warn('[FriendsView] Backend unavailable — falling back to base64 link');
+      }
     }
 
-    // 3. Brak subskrypcji push — użyj prostego linku z userId (bez push notyfikacji)
-    if (!sub) {
-      const userId = localStorage.getItem('mapyou_userId_profile') ?? localStorage.getItem('mapty_userId');
-      const name   = getUserName();
-      const base   = window.location.href.split('#')[0];
-      const link   = userId
-        ? `${base}#invite-user=${userId}`
-        : base;
-      this._copyOrShareLink(link, name);
-      return;
+    // 3. Fallback: base64 link (działa offline/bez backendu, identyczny format #invite=)
+    if (!link) {
+      const payload = {
+        name,
+        pushSub: sub?.toJSON() ?? {
+          endpoint: `local:${localStorage.getItem('mapyou_userId_profile') ?? Date.now()}`,
+          expirationTime: null,
+          keys: { p256dh: '', auth: '' },
+        },
+      };
+      const b64  = btoa(JSON.stringify(payload));
+      link = `${base}#invite=${b64}`;
     }
 
-    // 4. Wygeneruj KRÓTKI link przez backend (8 znaków zamiast 500)
-    const name    = getUserName();
-    const subJson = sub.toJSON() as Friend['pushSub'];
-
-    this._showToast('Generating link... ⏳');
-    let link: string;
-    try {
-      link = await generateInviteLink(name, subJson, BACKEND_URL);
-    } catch {
-      this._showToast('Failed to generate link — check connection');
-      return;
-    }
-
-    // 5. Web Share API (natywny sheet na iOS/Android) lub clipboard fallback
+    // 4. Web Share API lub clipboard fallback
     try {
       if (navigator.share) {
         await navigator.share({
