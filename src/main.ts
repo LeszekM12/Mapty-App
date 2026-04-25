@@ -1862,7 +1862,7 @@ window.app = new App();
       activeTab = tabId;
       if (tabId === 'tabStats') {
         document.getElementById('tabStats')?.classList.add('tab-panel--active');
-        void statsView.init();
+        void _migrationReady.then(() => statsView.init());
       } else {
         document.getElementById('tabStats')?.classList.remove('tab-panel--active');
       }
@@ -1910,7 +1910,7 @@ window.app = new App();
     } else {
       hideMobileSearchTab();
     }
-    if (activeTab === 'tabStats') void statsView.init();
+    if (activeTab === 'tabStats') void _migrationReady.then(() => statsView.init());
   }
 
   // mirrorWorkoutList replaced by StatsView
@@ -2068,7 +2068,7 @@ initUserProfile();
 // Migracja danych do unified workouts model
 // Remove old migration flag so re-migration runs on every start (safe — uses upsert)
 localStorage.removeItem('mapyou_unified_migrated');
-void migrateToUnified();
+const _migrationReady = migrateToUnified();
 
 // Pokaż modal imienia przy pierwszym uruchomieniu
 void showNameModalIfNeeded();
