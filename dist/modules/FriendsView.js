@@ -171,23 +171,32 @@ export class FriendsView {
     async _shareMyLink() {
         const name = getUserName();
         const base = window.location.href.split('#')[0];
-        // 1. Znajdź push subskrypcję (opcjonalna — bez niej link działa, brak powiadomień)
+        // 1. Znajdź push subskrypcję z timeoutem (opcjonalna — bez niej link działa)
         let sub = null;
         try {
-            const regs = await navigator.serviceWorker.getRegistrations();
-            for (const reg of regs) {
-                sub = await reg.pushManager.getSubscription();
-                if (sub)
-                    break;
-            }
+            const timeout = new Promise(r => setTimeout(() => r(null), 1500));
+            const lookup = (async () => {
+                const regs = await navigator.serviceWorker.getRegistrations();
+                for (const reg of regs) {
+                    const s = await reg.pushManager.getSubscription();
+                    if (s)
+                        return s;
+                }
+                return null;
+            })();
+            sub = await Promise.race([lookup, timeout]);
         }
-        catch { /* ignoruj — push niedostępny */ }
-        // 2. Spróbuj wygenerować krótki link przez backend (gdy push sub jest dostępna)
+        catch { /* push niedostępny */ }
+        // 2. Spróbuj krótki link przez backend (tylko gdy push sub dostępna, timeout 3s)
         let link = null;
         if (sub) {
             try {
                 const subJson = sub.toJSON();
-                link = await generateInviteLink(name, subJson, BACKEND_URL);
+                const backendTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 3000));
+                link = await Promise.race([
+                    generateInviteLink(name, subJson, BACKEND_URL),
+                    backendTimeout,
+                ]);
             }
             catch {
                 console.warn('[FriendsView] Backend unavailable — falling back to base64 link');
