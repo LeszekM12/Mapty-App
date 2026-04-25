@@ -23,6 +23,14 @@ db.version(4).stores({
     enrichedActivities: 'id, sport, date, name',
     profile: 'userId',
 });
+// version(5) — postsFeed (Home posts)
+db.version(5).stores({
+    workouts: 'id, type, date, distance, duration, cadence, pace, elevGain, speed',
+    activities: 'id, sport, date, distanceKm, durationSec',
+    enrichedActivities: 'id, sport, date, name',
+    profile: 'userId',
+    postsFeed: 'id, date',
+});
 // ── Normalizacja workoutu ─────────────────────────────────────────────────────
 function _generateDescription(type, isoDate) {
     const months = [
@@ -190,5 +198,26 @@ export async function loadProfileFromDB() {
     catch {
         return null;
     }
+}
+// ── CRUD — postsFeed ──────────────────────────────────────────────────────────
+export async function savePost(post) {
+    try {
+        await db.postsFeed.put(post);
+    }
+    catch (err) {
+        console.error('[DB] savePost error:', err);
+        throw err;
+    }
+}
+export async function loadPosts() {
+    try {
+        return await db.postsFeed.orderBy('date').reverse().toArray();
+    }
+    catch {
+        return [];
+    }
+}
+export async function deletePost(id) {
+    await db.postsFeed.delete(id);
 }
 //# sourceMappingURL=db.js.map

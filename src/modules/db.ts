@@ -49,6 +49,18 @@ export interface ProfileRecord {
   avatarB64: string | null;
 }
 
+/** Post in the Home feed (text + optional photo) */
+export interface PostRecord {
+  id:         string;
+  type:       'post';
+  date:       number;
+  title:      string;
+  body:       string;
+  photoUrl:   string | null;
+  authorName: string;
+  avatarB64:  string | null;
+}
+
 // ── Inicjalizacja Dexie ───────────────────────────────────────────────────────
 
 declare const Dexie: any;
@@ -79,6 +91,15 @@ db.version(4).stores({
   activities:         'id, sport, date, distanceKm, durationSec',
   enrichedActivities: 'id, sport, date, name',
   profile:            'userId',
+});
+
+// version(5) — postsFeed (Home posts)
+db.version(5).stores({
+  workouts:           'id, type, date, distance, duration, cadence, pace, elevGain, speed',
+  activities:         'id, sport, date, distanceKm, durationSec',
+  enrichedActivities: 'id, sport, date, name',
+  profile:            'userId',
+  postsFeed:          'id, date',
 });
 
 // ── Normalizacja workoutu ─────────────────────────────────────────────────────
@@ -261,4 +282,27 @@ export async function loadProfileFromDB(): Promise<ProfileRecord | null> {
   } catch {
     return null;
   }
+}
+
+// ── CRUD — postsFeed ──────────────────────────────────────────────────────────
+
+export async function savePost(post: PostRecord): Promise<void> {
+  try {
+    await db.postsFeed.put(post);
+  } catch (err) {
+    console.error('[DB] savePost error:', err);
+    throw err;
+  }
+}
+
+export async function loadPosts(): Promise<PostRecord[]> {
+  try {
+    return await db.postsFeed.orderBy('date').reverse().toArray();
+  } catch {
+    return [];
+  }
+}
+
+export async function deletePost(id: string): Promise<void> {
+  await db.postsFeed.delete(id);
 }
