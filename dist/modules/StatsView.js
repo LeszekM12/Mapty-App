@@ -5,6 +5,7 @@
 // Uses Chart.js (loaded from CDN in index.html) and UnifiedWorkout model.
 /// <reference types="leaflet" />
 import { loadUnifiedWorkouts, deleteUnifiedWorkout, formatDurSec, formatPaceSec, SPORT_ICONS_U, SPORT_COLORS_U, } from './UnifiedWorkout.js';
+import { recordWeeklyGoalWin } from './ProfileView.js';
 // ── Constants ─────────────────────────────────────────────────────────────────
 const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -288,6 +289,9 @@ export class StatsView {
         const fill = document.getElementById('svGoalFill');
         if (fill)
             fill.style.width = `${pct}%`;
+        // Record weekly goal win (only for current week, deduped inside)
+        if (pct >= 100 && this._weekOffset === 0)
+            recordWeeklyGoalWin();
         // Week label
         if (this._weekOffset === 0) {
             set('svWeekLabel', 'This week');
