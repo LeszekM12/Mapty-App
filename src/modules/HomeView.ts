@@ -5,7 +5,8 @@ import { loadEnrichedActivities, type EnrichedActivity } from './db.js';
 import { SPORT_COLORS, SPORT_ICONS, formatDuration, formatPace, formatDistance } from './Tracker.js';
 import type { SportType } from './Tracker.js';
 import { generateShareImageFromEnriched } from './ShareImage.js';
-import { openProfileModal, loadProfileFromLocal } from './UserProfile.js';
+import { loadProfileFromLocal } from './UserProfile.js';
+import { profileView } from './ProfileView.js';
 import { openPostModal } from './PostModal.js';
 import { openSaveActivityModal } from './SaveActivityModal.js';
 import { loadPosts, type PostRecord } from './db.js';
@@ -633,7 +634,7 @@ export class HomeView {
       </div>`;
     greeting.querySelector('#profileNavAvatar')?.addEventListener('click', e => {
       e.stopPropagation();
-      openProfileModal();
+      void profileView.open();
     });
     return greeting;
   }
