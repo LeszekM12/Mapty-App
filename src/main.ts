@@ -1158,6 +1158,7 @@ class App {
             this.#tracker?.reset();
             await this.#historyPanel?.render();
             await homeView.render();
+            await statsView.render();   // refresh Progress + History
             homeView.switchToHome();
           },
           // onCancel — user dismissed modal without saving → clear the route from map

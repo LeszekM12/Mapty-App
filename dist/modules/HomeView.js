@@ -7,6 +7,8 @@ import { loadProfileFromLocal } from './UserProfile.js';
 import { profileView } from './ProfileView.js';
 import { openPostModal } from './PostModal.js';
 import { openSaveActivityModal } from './SaveActivityModal.js';
+import { saveUnifiedWorkout } from './UnifiedWorkout.js';
+import { statsView } from './StatsView.js';
 import { loadPosts } from './db.js';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function relativeDate(timestamp) {
@@ -563,7 +565,30 @@ export class HomeView {
                 coords: [],
                 description: '',
             };
-            openSaveActivityModal(manualActivity, async () => { await this.render(); }, undefined);
+            openSaveActivityModal(manualActivity, async (enriched) => {
+                // Save to unifiedWorkouts so Stats → Progress sees it immediately
+                await saveUnifiedWorkout({
+                    id: enriched.id,
+                    type: enriched.sport,
+                    source: 'manual',
+                    date: new Date(enriched.date).toISOString(),
+                    distanceKm: enriched.distanceKm,
+                    durationSec: enriched.durationSec,
+                    paceMinKm: enriched.paceMinKm,
+                    speedKmH: enriched.speedKmH,
+                    elevGain: 0,
+                    coords: enriched.coords,
+                    name: enriched.name,
+                    description: enriched.description,
+                    notes: enriched.notes,
+                    intensity: enriched.intensity,
+                    photoUrl: enriched.photoUrl,
+                });
+                // Refresh Home feed
+                await this.render();
+                // Refresh Stats (Progress + History)
+                await statsView.render();
+            }, undefined);
         });
         // Close menu on outside click
         document.addEventListener('click', (e) => {

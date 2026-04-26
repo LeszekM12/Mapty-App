@@ -1208,6 +1208,7 @@ class App {
                     __classPrivateFieldGet(this, _App_tracker, "f")?.reset();
                     await __classPrivateFieldGet(this, _App_historyPanel, "f")?.render();
                     await homeView.render();
+                    await statsView.render(); // refresh Progress + History
                     homeView.switchToHome();
                 }, 
                 // onCancel — user dismissed modal without saving → clear the route from map
