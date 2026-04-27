@@ -5,6 +5,7 @@
 // Stored locally in IndexedDB (postsFeed table) + localStorage fallback.
 
 import { savePost, type PostRecord } from './db.js';
+import { getJoinedClubs, addToClubFeed } from './SearchView.js';
 
 // ── Build HTML ────────────────────────────────────────────────────────────────
 
@@ -55,6 +56,7 @@ function buildHTML(): string {
 
       </div>
 
+      <div class="pm-share-clubs" id="pmShareClubs"></div>
       <div class="pm-footer">
         <button class="pm-btn pm-btn--cancel" id="pmCancel">Cancel</button>
         <button class="pm-btn pm-btn--post" id="pmPost">
@@ -150,6 +152,24 @@ export class PostModal {
     // Post
     el.querySelector('#pmPost')?.addEventListener('click', () => void this._submit(el));
 
+    // Share to club checkboxes
+    const pmShareWrap = el.querySelector<HTMLElement>('#pmShareClubs');
+    if (pmShareWrap) {
+      const clubs = getJoinedClubs();
+      if (clubs.length > 0) {
+        pmShareWrap.innerHTML = `
+          <div class="sam-share-clubs__inner">
+            <div class="sam-share-clubs__title">Share to club</div>
+            ${clubs.map(c => `
+              <label class="sam-share-clubs__item">
+                <input type="checkbox" class="pm-club-check" data-club-id="${c.id}" data-club-name="${c.name}"/>
+                <span class="sam-share-clubs__check-icon"></span>
+                <span class="sam-share-clubs__name">${c.name}</span>
+              </label>`).join('')}
+          </div>`;
+      }
+    }
+
     // Swipe to close
     const handle = el.querySelector<HTMLElement>('.pm-handle')!;
     const sheet  = el.querySelector<HTMLElement>('.pm-sheet')!;
@@ -191,6 +211,20 @@ export class PostModal {
     };
 
     await savePost(post);
+    // Share to selected clubs
+    const checkedClubs = el.querySelectorAll<HTMLInputElement>('.pm-club-check:checked');
+    const userName = localStorage.getItem('mapyou_userName') ?? 'Athlete';
+    checkedClubs.forEach(cb => {
+      addToClubFeed(cb.dataset.clubId!, {
+        id:          `cf_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
+        type:        'post',
+        title:       post.title,
+        body:        post.body ?? '',
+        date:        post.date,
+        authorName:  userName,
+      });
+    });
+
     this.close();
     this._onSave(post);
   }

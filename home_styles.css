@@ -2089,3 +2089,53 @@
   border-color: var(--color-brand--2, #00c46a);
   background: rgba(0,196,106,0.08);
 }
+
+
+/* ── Share to club (SaveActivityModal + PostModal) ── */
+.sam-share-clubs,
+.pm-share-clubs {
+  padding: 0 20px 8px;
+}
+.sam-share-clubs__inner {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 14px 16px;
+}
+.sam-share-clubs__title {
+  font-size: 1.1rem; font-weight: 700;
+  color: rgba(255,255,255,0.4);
+  text-transform: uppercase; letter-spacing: 0.6px;
+  margin-bottom: 10px;
+}
+.sam-share-clubs__item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.sam-share-clubs__item:last-child { border-bottom: none; }
+.sam-share-clubs__item input[type="checkbox"] { display: none; }
+.sam-share-clubs__check-icon {
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  border: 2px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.04);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.2s, border-color 0.2s;
+}
+.sam-share-clubs__item input:checked + .sam-share-clubs__check-icon {
+  background: var(--color-brand--2, #00c46a);
+  border-color: var(--color-brand--2, #00c46a);
+}
+.sam-share-clubs__item input:checked + .sam-share-clubs__check-icon::after {
+  content: '✓';
+  color: #fff;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.sam-share-clubs__name {
+  font-size: 1.3rem; font-weight: 600; color: #fff;
+}

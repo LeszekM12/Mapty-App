@@ -12,6 +12,18 @@ const LS_FRIENDS = 'mapyou_local_friends';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+export interface ClubFeedItem {
+  id:        string;
+  type:      'activity' | 'post';
+  title:     string;
+  body:      string;
+  date:      number;
+  authorName:string;
+  sport?:    string;
+  distanceKm?: number;
+  durationSec?: number;
+}
+
 export interface LocalClub {
   id:          string;
   name:        string;
@@ -22,6 +34,9 @@ export interface LocalClub {
   isOwner:     boolean;
   joined:      boolean;
   createdAt:   number;
+  bannerB64?:  string | null;
+  logoB64?:    string | null;
+  feed?:       ClubFeedItem[];
 }
 
 export interface LocalFriend {
@@ -33,12 +48,25 @@ export interface LocalFriend {
 
 // ── Storage helpers ───────────────────────────────────────────────────────────
 
-function loadClubs(): LocalClub[] {
+export function loadClubs(): LocalClub[] {
   try { return JSON.parse(localStorage.getItem(LS_CLUBS) ?? '[]'); }
   catch { return []; }
 }
-function saveClubs(clubs: LocalClub[]): void {
+export function saveClubs(clubs: LocalClub[]): void {
   localStorage.setItem(LS_CLUBS, JSON.stringify(clubs));
+}
+
+export function getJoinedClubs(): LocalClub[] {
+  return loadClubs().filter(c => c.joined || c.isOwner);
+}
+
+export function addToClubFeed(clubId: string, item: ClubFeedItem): void {
+  const clubs = loadClubs();
+  const club  = clubs.find(c => c.id === clubId);
+  if (!club) return;
+  if (!club.feed) club.feed = [];
+  club.feed.unshift(item);
+  saveClubs(clubs);
 }
 function loadFriends(): LocalFriend[] {
   try { return JSON.parse(localStorage.getItem(LS_FRIENDS) ?? '[]'); }
@@ -314,11 +342,17 @@ export class SearchView {
     const sportIcons: Record<string, string> = {
       running: '🏃', walking: '🚶', cycling: '🚴', fitness: '💪', hiking: '🥾', other: '🏅',
     };
+    const colors: Record<string, string> = {
+      running: '#00c46a', cycling: '#ffb545', walking: '#5badea', fitness: '#f97316', hiking: '#a78bfa', other: '#6b7280',
+    };
     const icon = sportIcons[c.sport] ?? '🏅';
+    const logoStyle = c.logoB64
+      ? `background:url('${c.logoB64}') center/cover no-repeat;`
+      : `background:${colors[c.sport] ?? '#00c46a'}22;`;
     return `
       <div class="sv2-item sv2-item--club" data-club-open="${c.id}" style="cursor:pointer">
-        <div class="sv2-item__avatar sv2-item__avatar--club">
-          <span style="font-size:1.6rem">${icon}</span>
+        <div class="sv2-item__avatar sv2-item__avatar--club" style="${logoStyle}">
+          ${c.logoB64 ? '' : `<span style="font-size:1.6rem">${icon}</span>`}
         </div>
         <div class="sv2-item__info">
           <span class="sv2-item__name">${c.name}</span>
@@ -351,13 +385,49 @@ export class SearchView {
     const modal = document.createElement('div');
     modal.id = 'clubDetailModal';
     modal.className = 'sv2-club-detail-overlay';
+    const feed = club.feed ?? [];
+    const feedHtml = feed.length === 0
+      ? `<div class="sv2-club-detail__feed-empty">
+           <span>📢</span>
+           <p>No posts yet in this club.</p>
+           <p class="sv2-club-detail__feed-sub">Share activities or posts to see them here.</p>
+         </div>`
+      : feed.map(f => `
+          <div class="sv2-club-feed-item">
+            <div class="sv2-club-feed-item__top">
+              <span class="sv2-club-feed-item__author">${f.authorName}</span>
+              <span class="sv2-club-feed-item__date">${new Date(f.date).toLocaleDateString('en',{month:'short',day:'numeric'})}</span>
+            </div>
+            <div class="sv2-club-feed-item__title">${f.title}</div>
+            ${f.body ? `<div class="sv2-club-feed-item__body">${f.body}</div>` : ''}
+            ${f.type === 'activity' && f.distanceKm ? `
+              <div class="sv2-club-feed-item__stats">
+                <span>${f.distanceKm.toFixed(2)} km</span>
+                ${f.durationSec ? `<span>${Math.floor(f.durationSec/60)}m</span>` : ''}
+              </div>` : ''}
+          </div>`).join('');
+
     modal.innerHTML = `
       <div class="sv2-club-detail">
         <!-- Banner -->
-        <div class="sv2-club-detail__banner" style="background:linear-gradient(135deg,${color}33,${color}11)">
+        <div class="sv2-club-detail__banner" style="${club.bannerB64
+          ? `background:url('${club.bannerB64}') center/cover`
+          : `background:linear-gradient(135deg,${color}33,${color}11)`}">
           <button class="sv2-club-detail__back" id="cdbBack">←</button>
-          <div class="sv2-club-detail__logo" style="background:${color}22;border:2px solid ${color}44">
-            <span style="font-size:2.8rem">${icon}</span>
+          ${club.isOwner ? `
+          <label class="sv2-club-detail__edit-banner" title="Change banner">
+            📷
+            <input type="file" accept="image/*" id="cdbBannerInput" style="display:none"/>
+          </label>` : ''}
+          <div class="sv2-club-detail__logo" style="${club.logoB64
+            ? `background:url('${club.logoB64}') center/cover;border:2px solid ${color}44`
+            : `background:${color}22;border:2px solid ${color}44`}">
+            ${club.logoB64 ? '' : `<span style="font-size:2.8rem">${icon}</span>`}
+            ${club.isOwner ? `
+            <label class="sv2-club-detail__edit-logo" title="Change logo">
+              ✏️
+              <input type="file" accept="image/*" id="cdbLogoInput" style="display:none"/>
+            </label>` : ''}
           </div>
         </div>
 
@@ -371,8 +441,6 @@ export class SearchView {
             ${club.location ? `<span>📍 ${club.location}</span>` : ''}
           </div>
           ${club.description ? `<p class="sv2-club-detail__desc">${club.description}</p>` : ''}
-
-          <!-- Action buttons -->
           <div class="sv2-club-detail__actions">
             ${club.isOwner
               ? `<button class="sv2-club-action sv2-club-action--owner" disabled>👑 You own this club</button>`
@@ -381,17 +449,11 @@ export class SearchView {
           </div>
         </div>
 
-        <!-- Feed placeholder -->
+        <!-- Feed -->
         <div class="sv2-club-detail__section-title">Club Feed</div>
-        <div class="sv2-club-detail__feed">
-          <div class="sv2-club-detail__feed-empty">
-            <span>📢</span>
-            <p>No posts yet in this club.</p>
-            <p class="sv2-club-detail__feed-sub">Club activity feed will sync when the backend launches.</p>
-          </div>
-        </div>
+        <div class="sv2-club-detail__feed">${feedHtml}</div>
 
-        <!-- Members placeholder -->
+        <!-- Members -->
         <div class="sv2-club-detail__section-title">Members (${club.memberCount})</div>
         <div class="sv2-club-detail__members">
           <div class="sv2-item" style="margin:0 16px">
@@ -417,6 +479,38 @@ export class SearchView {
     };
 
     modal.querySelector('#cdbBack')?.addEventListener('click', close);
+
+    // Banner upload
+    modal.querySelector('#cdbBannerInput')?.addEventListener('change', e => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const b64 = reader.result as string;
+        const clubs = loadClubs();
+        const c = clubs.find(x => x.id === club.id);
+        if (c) { c.bannerB64 = b64; saveClubs(clubs); }
+        const bannerEl = modal.querySelector<HTMLElement>('.sv2-club-detail__banner');
+        if (bannerEl) bannerEl.style.background = `url('${b64}') center/cover`;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Logo upload
+    modal.querySelector('#cdbLogoInput')?.addEventListener('change', e => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const b64 = reader.result as string;
+        const clubs = loadClubs();
+        const c = clubs.find(x => x.id === club.id);
+        if (c) { c.logoB64 = b64; saveClubs(clubs); }
+        const logoEl = modal.querySelector<HTMLElement>('.sv2-club-detail__logo');
+        if (logoEl) { logoEl.style.background = `url('${b64}') center/cover`; logoEl.innerHTML = ''; }
+      };
+      reader.readAsDataURL(file);
+    });
 
     modal.querySelector('#cdbJoin')?.addEventListener('click', () => {
       const clubs = loadClubs();
