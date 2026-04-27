@@ -271,15 +271,7 @@ export class ProfileView {
           </div>
         </div>
 
-        <!-- Weekly goal cup -->
-        ${weeklyWins > 0 ? `
-        <div class="pv-goal-cup">
-          <span class="pv-goal-cup__icon">🏆</span>
-          <div class="pv-goal-cup__info">
-            <span class="pv-goal-cup__title">Weekly goal achieved <strong>${weeklyWins}×</strong></span>
-            <span class="pv-goal-cup__sub">Keep crushing your goals!</span>
-          </div>
-        </div>` : ''}
+
 
         <!-- Sub-tabs -->
         <div class="pv-subtabs" id="pvSubtabs">
@@ -469,15 +461,25 @@ export class ProfileView {
   // ── Trophies ────────────────────────────────────────────────────────────────
 
   private _renderTrophies(el: HTMLElement): void {
-    const actTrophies = _activityTrophies(this._workouts);
-    const wkTrophies  = _weeklyTrophies();
+    const actTrophies  = _activityTrophies(this._workouts);
+    const wkTrophies   = _weeklyTrophies();
     const totalUnlocked = [...actTrophies, ...wkTrophies].filter(t => t.unlocked).length;
+    const weeklyWins   = parseInt(localStorage.getItem(LS_WEEKLY_WINS) ?? '0', 10);
 
     el.innerHTML = `
       <div class="pv-trophy-summary">
         <span class="pv-trophy-summary__count">${totalUnlocked}</span>
         <span class="pv-trophy-summary__label">trophies unlocked</span>
       </div>
+
+      ${weeklyWins > 0 ? `
+      <div class="pv-goal-cup">
+        <span class="pv-goal-cup__icon">🏆</span>
+        <div class="pv-goal-cup__info">
+          <span class="pv-goal-cup__title">Weekly goal achieved <strong>${weeklyWins}×</strong></span>
+          <span class="pv-goal-cup__sub">Keep crushing your goals!</span>
+        </div>
+      </div>` : ''}
 
       <div class="pv-section-title">⚡ Activity Milestones</div>
       <div class="pv-trophy-grid">${actTrophies.map(_buildTrophySVG).join('')}</div>
