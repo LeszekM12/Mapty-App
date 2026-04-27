@@ -30,10 +30,10 @@ function buildHTML(): string {
         <div class="pm-field">
           <label class="pm-label" for="pmDesc">
             Description
-            <span class="pm-char-count" id="pmDescCount">0/300</span>
+            <span class="pm-char-count" id="pmDescCount">0/500</span>
           </label>
           <textarea class="pm-textarea" id="pmDesc" rows="5"
-            maxlength="300" placeholder="Share your story, thoughts or experience…"></textarea>
+            maxlength="500" placeholder="Share your story, thoughts or experience…"></textarea>
         </div>
 
         <div class="pm-field">
@@ -110,7 +110,7 @@ export class PostModal {
     // Char count
     const desc  = el.querySelector<HTMLTextAreaElement>('#pmDesc')!;
     const count = el.querySelector<HTMLElement>('#pmDescCount')!;
-    desc.addEventListener('input', () => { count.textContent = `${desc.value.length}/300`; });
+    desc.addEventListener('input', () => { count.textContent = `${desc.value.length}/500`; });
 
     // Photo
     const zone      = el.querySelector<HTMLElement>('#pmPhotoZone')!;
