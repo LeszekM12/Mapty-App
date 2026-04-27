@@ -6,6 +6,7 @@
 // On save → writes EnrichedActivity to IndexedDB → triggers Home refresh.
 import { SPORT_COLORS, SPORT_ICONS } from './Tracker.js';
 import { saveEnrichedActivity } from './db.js';
+import { getJoinedClubs, addToClubFeed } from './SearchView.js';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function blobToDataUrl(blob) {
     return new Promise((res, rej) => {
@@ -179,6 +180,8 @@ function buildModalHtml(activity, isManual) {
 
       </div><!-- /sam-body -->
 
+      <div id="samShareClubs"></div>
+
       <!-- Footer -->
       <div class="sam-footer">
         <button class="sam-btn sam-btn--cancel" id="samBtnCancel">Cancel</button>
@@ -264,6 +267,25 @@ export class SaveActivityModal {
         });
         this._bindEvents();
         this._initMiniMap();
+        this._renderShareClubs();
+    }
+    _renderShareClubs() {
+        const wrap = document.getElementById('samShareClubs');
+        if (!wrap)
+            return;
+        const clubs = getJoinedClubs();
+        if (clubs.length === 0)
+            return;
+        wrap.innerHTML = `
+      <div class="sam-share-clubs__inner">
+        <div class="sam-share-clubs__title">Share to club</div>
+        ${clubs.map(c => `
+          <label class="sam-share-clubs__item">
+            <input type="checkbox" class="sam-club-check" data-club-id="${c.id}" data-club-name="${c.name}"/>
+            <span class="sam-share-clubs__check-icon"></span>
+            <span class="sam-share-clubs__name">${c.name}</span>
+          </label>`).join('')}
+      </div>`;
     }
     close(saved = false) {
         if (!this._el)
@@ -521,6 +543,22 @@ export class SaveActivityModal {
                 : this._activity.coords,
         };
         await saveEnrichedActivity(enriched);
+        // Share to selected clubs
+        const checkedClubs = this._el?.querySelectorAll('.sam-club-check:checked') ?? [];
+        const userName = localStorage.getItem('mapyou_userName') ?? 'Athlete';
+        checkedClubs.forEach(cb => {
+            addToClubFeed(cb.dataset.clubId, {
+                id: `cf_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                type: 'activity',
+                title: enriched.name || enriched.description || enriched.sport,
+                body: enriched.description,
+                date: enriched.date,
+                authorName: userName,
+                sport: enriched.sport,
+                distanceKm: enriched.distanceKm,
+                durationSec: enriched.durationSec,
+            });
+        });
         this._onSave(enriched); // render first, then close
         this.close(true); // saved=true → skip onCancel
     }
