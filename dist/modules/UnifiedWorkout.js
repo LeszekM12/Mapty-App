@@ -86,6 +86,22 @@ function _fromActivity(a) {
         photoUrl: null,
     };
 }
+// ── Deleted IDs tracking ─────────────────────────────────────────────────────
+const LS_DELETED = 'mapyou_deleted_workout_ids';
+export function markWorkoutDeleted(id) {
+    const ids = _getDeletedIds();
+    ids.add(id);
+    localStorage.setItem(LS_DELETED, JSON.stringify([...ids]));
+}
+function _getDeletedIds() {
+    try {
+        const raw = localStorage.getItem(LS_DELETED);
+        return new Set(raw ? JSON.parse(raw) : []);
+    }
+    catch {
+        return new Set();
+    }
+}
 // ── Migration ─────────────────────────────────────────────────────────────────
 export async function migrateToUnified() {
     // Always collect from all source tables and bulkPut (put = upsert, safe to re-run)
@@ -127,9 +143,16 @@ export async function migrateToUnified() {
         }
     }
     catch { }
-    if (results.length > 0) {
-        await db.unifiedWorkouts.bulkPut(results);
-        console.info(`[UnifiedDB] ✅ Synced ${results.length} workouts to unified table`);
+    // Filter out deleted workouts
+    const deletedIds = _getDeletedIds();
+    const filtered = results.filter(r => !deletedIds.has(r.id));
+    if (filtered.length > 0) {
+        await db.unifiedWorkouts.bulkPut(filtered);
+        console.info(`[UnifiedDB] ✅ Synced ${filtered.length} workouts to unified table`);
+    }
+    // Also clean up any that snuck back in
+    if (deletedIds.size > 0) {
+        await Promise.all([...deletedIds].map(id => db.unifiedWorkouts.delete(id).catch(() => { })));
     }
 }
 // ── Helpers ───────────────────────────────────────────────────────────────────

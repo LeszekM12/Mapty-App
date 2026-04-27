@@ -6,15 +6,19 @@
 
 /// <reference types="leaflet" />
 import {
-  loadUnifiedWorkouts, deleteUnifiedWorkout,
+  loadUnifiedWorkouts, deleteUnifiedWorkout, markWorkoutDeleted,
   formatDurSec, formatPaceSec,
   SPORT_ICONS_U, SPORT_COLORS_U,
   type UnifiedWorkout, type WorkoutType,
 } from './UnifiedWorkout.js';
+import {
+  deleteEnrichedActivity, deleteActivity, deleteWorkoutFromDB,
+} from './db.js';
 import { recordWeeklyGoalWin } from './ProfileView.js';
 import { notifyWeeklyGoal } from './NotificationsService.js';
 
 declare const Chart: any;
+// homeView imported lazily to avoid circular deps
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -587,9 +591,20 @@ export class StatsView {
         e.stopPropagation();
         if (!confirm('Delete this workout?')) return;
         const id = btn.dataset.del!;
-        await deleteUnifiedWorkout(id);
+        // 1. Mark deleted so migration never restores it
+        markWorkoutDeleted(id);
+        // 2. Delete from ALL tables
+        await Promise.all([
+          deleteUnifiedWorkout(id).catch(() => {}),
+          deleteEnrichedActivity(id).catch(() => {}),
+          deleteActivity(id).catch(() => {}),
+          deleteWorkoutFromDB(id).catch(() => {}),
+        ]);
+        // 3. Update local list + re-render
         this._workouts = this._workouts.filter(w => w.id !== id);
         this._renderHistoryList();
+        // 4. Refresh Home feed
+        void import('./HomeView.js').then(m => m.homeView.render());
       });
     });
   }
