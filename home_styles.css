@@ -1970,3 +1970,104 @@
   font-family: inherit;
   display: block;
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STREAK WIDGET
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.home-streak {
+  margin: 10px 16px 0;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 20px;
+  padding: 14px 16px;
+  overflow: hidden;
+}
+
+.home-streak__inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Flame + count */
+.home-streak__flame-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.home-streak__flame {
+  width: 32px;
+  height: 40px;
+  filter: drop-shadow(0 0 8px rgba(249,115,22,0.6));
+}
+.home-streak__count {
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: #f97316;
+  line-height: 1;
+}
+
+/* Right side */
+.home-streak__right {
+  flex: 1;
+  min-width: 0;
+}
+.home-streak__title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 7 day dots */
+.home-streak__dots {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+.home-streak__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+.home-streak__dot {
+  width: 100%;
+  max-width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.07);
+  border: 2px solid rgba(255,255,255,0.1);
+  transition: background 0.2s, border-color 0.2s, transform 0.2s;
+}
+.home-streak__dot--active {
+  background: #f97316;
+  border-color: #f97316;
+  box-shadow: 0 0 8px rgba(249,115,22,0.5);
+}
+.home-streak__dot--today {
+  border-color: rgba(255,255,255,0.4);
+}
+.home-streak__dot--active.home-streak__dot--today {
+  border-color: #fff;
+  transform: scale(1.1);
+}
+
+.home-streak__day-label {
+  font-size: 0.95rem;
+  color: rgba(255,255,255,0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.home-streak__day-label--today {
+  color: rgba(255,255,255,0.7);
+  font-weight: 700;
+}
