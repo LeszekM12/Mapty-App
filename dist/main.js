@@ -2136,6 +2136,18 @@ window.app = new App();
     let activeTab = 'tabMap';
     let routeActive = false;
     const MOBILE_SEARCH_BAR = document.getElementById('mapSearchBarMobile');
+    // Show search bar immediately if starting on Map tab
+    // (without this, it stays hidden until user switches away and back)
+    if (activeTab === 'tabMap') {
+        setTimeout(() => {
+            if (!routeActive) {
+                SEARCH_BAR?.classList.remove('msb--hidden-tab', 'msb--hidden-route');
+                SEARCH_BAR?.classList.add('msb--visible');
+                MOBILE_SEARCH_BAR?.classList.remove('msb--hidden-tab', 'msb--hidden-route');
+                MOBILE_SEARCH_BAR?.classList.add('msb--visible');
+            }
+        }, 100);
+    }
     function showSearch() {
         if (!SEARCH_BAR)
             return;
