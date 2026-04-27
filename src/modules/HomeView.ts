@@ -382,10 +382,15 @@ function buildCard(act: EnrichedActivity): HTMLElement {
     ? `<p class="home-card__notes">🔒 ${act.notes}</p>`
     : '';
 
+  const profile = loadProfileFromLocal();
+  const userAvatarHtml = profile.avatarB64
+    ? `<img src="${profile.avatarB64}" class="home-card__avatar-img" alt="avatar"/>`
+    : `<span>${icon}</span>`;
+
   card.innerHTML = `
     <div class="home-card__header">
-      <div class="home-card__avatar" style="background:${color}20;border:2px solid ${color}40">
-        <span>${icon}</span>
+      <div class="home-card__avatar home-card__avatar--user" style="border-color:${color}40;background:${color}20">
+        ${userAvatarHtml}
       </div>
       <div class="home-card__meta">
         <h3 class="home-card__name">${act.name || act.description}</h3>
@@ -400,7 +405,7 @@ function buildCard(act: EnrichedActivity): HTMLElement {
     ${act.description && act.name && act.description !== act.name
       ? `<p class="home-card__desc">${act.description}</p>` : ''}
 
-    <div class="home-card__map-wrap" id="${mapId}"></div>
+    ${act.coords && act.coords.length > 0 ? `<div class="home-card__map-wrap" id="${mapId}"></div>` : ''}
 
     ${photoHtml}
 

@@ -71,13 +71,16 @@ function buildModalHtml(activity, isManual) {
           <input
             class="sam-input" id="samName" type="text"
             placeholder="${icon} ${activity.sport.charAt(0).toUpperCase() + activity.sport.slice(1)} on ${new Date(activity.date).toLocaleDateString('en', { month: 'short', day: 'numeric' })}"
-            maxlength="64" autocomplete="off"
+            maxlength="20" autocomplete="off"
           />
         </div>
 
         <!-- Description -->
         <div class="sam-field">
-          <label class="sam-label" for="samDesc">Description</label>
+          <label class="sam-label" for="samDesc">
+            Description
+            <span class="sam-char-count" id="samDescCount">0/300</span>
+          </label>
           <textarea class="sam-textarea" id="samDesc" placeholder="How did it go? Share your story..." rows="3" maxlength="300"></textarea>
         </div>
 
@@ -406,6 +409,13 @@ export class SaveActivityModal {
             if (placeholder)
                 placeholder.classList.add('hidden');
             photoZone?.classList.add('sam-photo-zone--filled');
+        });
+        // Desc char counter
+        const samDescEl = el.querySelector('#samDesc');
+        const samDescCount = el.querySelector('#samDescCount');
+        samDescEl?.addEventListener('input', () => {
+            if (samDescCount)
+                samDescCount.textContent = `${samDescEl.value.length}/300`;
         });
         // Save
         el.querySelector('#samBtnSave')?.addEventListener('click', () => void this._save());
