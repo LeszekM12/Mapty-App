@@ -1889,3 +1889,6 @@
   white-space: nowrap;
   backdrop-filter: blur(4px);
 }
+
+/* sam-char-count reuses pm-char-count style */
+.sam-char-count { font-size: 1rem; font-weight: 400; color: rgba(255,255,255,0.2); text-transform: none; letter-spacing: 0; margin-left: auto; }

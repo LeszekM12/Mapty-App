@@ -21,16 +21,16 @@ function buildHTML() {
         <div class="pm-field">
           <label class="pm-label" for="pmTitle">Title</label>
           <input class="pm-input" id="pmTitle" type="text"
-            placeholder="What's your post about?" maxlength="80" autocomplete="off"/>
+            placeholder="What's your post about?" maxlength="20" autocomplete="off"/>
         </div>
 
         <div class="pm-field">
           <label class="pm-label" for="pmDesc">
             Description
-            <span class="pm-char-count" id="pmDescCount">0/500</span>
+            <span class="pm-char-count" id="pmDescCount">0/300</span>
           </label>
           <textarea class="pm-textarea" id="pmDesc" rows="5"
-            maxlength="500" placeholder="Share your story, thoughts or experience…"></textarea>
+            maxlength="300" placeholder="Share your story, thoughts or experience…"></textarea>
         </div>
 
         <div class="pm-field">
@@ -123,7 +123,7 @@ export class PostModal {
         // Char count
         const desc = el.querySelector('#pmDesc');
         const count = el.querySelector('#pmDescCount');
-        desc.addEventListener('input', () => { count.textContent = `${desc.value.length}/500`; });
+        desc.addEventListener('input', () => { count.textContent = `${desc.value.length}/300`; });
         // Photo
         const zone = el.querySelector('#pmPhotoZone');
         const input = el.querySelector('#pmPhotoInput');
