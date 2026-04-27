@@ -290,6 +290,16 @@ export class SearchView {
       });
     });
 
+    // Open club detail on item click
+    el.querySelectorAll<HTMLElement>('[data-club-open]').forEach(item => {
+      item.addEventListener('click', e => {
+        if ((e.target as HTMLElement).closest('[data-club-join],[data-club-del]')) return;
+        const id = item.dataset.clubOpen!;
+        const club = loadClubs().find(c => c.id === id);
+        if (club) this._openClubDetail(club);
+      });
+    });
+
     el.querySelectorAll<HTMLElement>('[data-club-del]').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = btn.dataset.clubDel!;
@@ -306,7 +316,7 @@ export class SearchView {
     };
     const icon = sportIcons[c.sport] ?? '🏅';
     return `
-      <div class="sv2-item sv2-item--club">
+      <div class="sv2-item sv2-item--club" data-club-open="${c.id}" style="cursor:pointer">
         <div class="sv2-item__avatar sv2-item__avatar--club">
           <span style="font-size:1.6rem">${icon}</span>
         </div>
@@ -326,6 +336,98 @@ export class SearchView {
   }
 
   // ── Create club modal ─────────────────────────────────────────────────────
+
+  private _openClubDetail(club: LocalClub): void {
+    document.getElementById('clubDetailModal')?.remove();
+    const sportIcons: Record<string, string> = {
+      running: '🏃', walking: '🚶', cycling: '🚴', fitness: '💪', hiking: '🥾', other: '🏅',
+    };
+    const icon  = sportIcons[club.sport] ?? '🏅';
+    const colors: Record<string, string> = {
+      running: '#00c46a', cycling: '#ffb545', walking: '#5badea', fitness: '#f97316', hiking: '#a78bfa', other: '#6b7280',
+    };
+    const color = colors[club.sport] ?? '#00c46a';
+
+    const modal = document.createElement('div');
+    modal.id = 'clubDetailModal';
+    modal.className = 'sv2-club-detail-overlay';
+    modal.innerHTML = `
+      <div class="sv2-club-detail">
+        <!-- Banner -->
+        <div class="sv2-club-detail__banner" style="background:linear-gradient(135deg,${color}33,${color}11)">
+          <button class="sv2-club-detail__back" id="cdbBack">←</button>
+          <div class="sv2-club-detail__logo" style="background:${color}22;border:2px solid ${color}44">
+            <span style="font-size:2.8rem">${icon}</span>
+          </div>
+        </div>
+
+        <!-- Info -->
+        <div class="sv2-club-detail__info">
+          <h2 class="sv2-club-detail__name">${club.name}</h2>
+          <div class="sv2-club-detail__meta">
+            <span>${icon} ${club.sport.charAt(0).toUpperCase() + club.sport.slice(1)}</span>
+            <span>👥 ${club.memberCount} member${club.memberCount !== 1 ? 's' : ''}</span>
+            <span>🌐 Public</span>
+            ${club.location ? `<span>📍 ${club.location}</span>` : ''}
+          </div>
+          ${club.description ? `<p class="sv2-club-detail__desc">${club.description}</p>` : ''}
+
+          <!-- Action buttons -->
+          <div class="sv2-club-detail__actions">
+            ${club.isOwner
+              ? `<button class="sv2-club-action sv2-club-action--owner" disabled>👑 You own this club</button>`
+              : `<button class="sv2-club-action ${club.joined ? 'sv2-club-action--leave' : 'sv2-club-action--join'}"
+                  id="cdbJoin">${club.joined ? 'Leave club' : 'Join club'}</button>`}
+          </div>
+        </div>
+
+        <!-- Feed placeholder -->
+        <div class="sv2-club-detail__section-title">Club Feed</div>
+        <div class="sv2-club-detail__feed">
+          <div class="sv2-club-detail__feed-empty">
+            <span>📢</span>
+            <p>No posts yet in this club.</p>
+            <p class="sv2-club-detail__feed-sub">Club activity feed will sync when the backend launches.</p>
+          </div>
+        </div>
+
+        <!-- Members placeholder -->
+        <div class="sv2-club-detail__section-title">Members (${club.memberCount})</div>
+        <div class="sv2-club-detail__members">
+          <div class="sv2-item" style="margin:0 16px">
+            <div class="sv2-item__avatar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="22" height="22">
+                <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+              </svg>
+            </div>
+            <div class="sv2-item__info">
+              <span class="sv2-item__name">${localStorage.getItem('mapyou_userName') ?? 'You'}</span>
+              <span class="sv2-item__sub">${club.isOwner ? '👑 Owner' : '👤 Member'}</span>
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+    document.body.appendChild(modal);
+    requestAnimationFrame(() => modal.classList.add('sv2-club-detail-overlay--visible'));
+
+    const close = () => {
+      modal.classList.remove('sv2-club-detail-overlay--visible');
+      setTimeout(() => modal.remove(), 320);
+    };
+
+    modal.querySelector('#cdbBack')?.addEventListener('click', close);
+
+    modal.querySelector('#cdbJoin')?.addEventListener('click', () => {
+      const clubs = loadClubs();
+      const c = clubs.find(x => x.id === club.id);
+      if (!c) return;
+      c.joined = !c.joined;
+      c.memberCount = Math.max(0, c.memberCount + (c.joined ? 1 : -1));
+      saveClubs(clubs);
+      close();
+    });
+  }
 
   private _openCreateClubModal(parentEl: HTMLElement): void {
     document.getElementById('createClubModal')?.remove();

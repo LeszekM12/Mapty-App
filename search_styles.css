@@ -298,3 +298,80 @@
 }
 .sv2-modal__btn--cancel { background: rgba(255,255,255,0.07); color: #aaa; flex: 0 0 auto; padding: 14px 20px; }
 .sv2-modal__btn--save   { background: var(--color-brand--2, #00c46a); color: #fff; }
+
+
+/* ── Club Detail ── */
+.sv2-club-detail-overlay {
+  position: fixed; inset: 0; z-index: 7000;
+  background: #141417;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.28s;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.sv2-club-detail-overlay--visible { opacity: 1; pointer-events: all; }
+
+.sv2-club-detail__banner {
+  height: 180px;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  padding: 16px;
+}
+.sv2-club-detail__back {
+  position: absolute; top: 16px; left: 16px;
+  background: rgba(0,0,0,0.45); border: none; color: #fff;
+  width: 38px; height: 38px; border-radius: 50%;
+  font-size: 1.6rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(4px);
+}
+.sv2-club-detail__logo {
+  width: 80px; height: 80px;
+  border-radius: 20px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.08);
+}
+.sv2-club-detail__info { padding: 16px 20px 0; }
+.sv2-club-detail__name {
+  font-size: 2.2rem; font-weight: 900; color: #fff; margin: 0 0 8px;
+}
+.sv2-club-detail__meta {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  font-size: 1.2rem; color: rgba(255,255,255,0.5);
+  margin-bottom: 10px;
+}
+.sv2-club-detail__desc {
+  font-size: 1.3rem; color: rgba(255,255,255,0.6);
+  line-height: 1.5; margin: 0 0 16px;
+}
+.sv2-club-detail__actions { margin-bottom: 20px; }
+
+.sv2-club-action {
+  width: 100%;
+  padding: 14px;
+  border-radius: 16px; border: none;
+  font-size: 1.45rem; font-weight: 700;
+  font-family: inherit; cursor: pointer;
+  transition: opacity 0.2s;
+}
+.sv2-club-action--join  { background: var(--color-brand--2, #00c46a); color: #fff; }
+.sv2-club-action--leave { background: rgba(248,113,113,0.15); color: #f87171; border: 1.5px solid rgba(248,113,113,0.3); }
+.sv2-club-action--owner { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.4); cursor: default; }
+
+.sv2-club-detail__section-title {
+  font-size: 1.05rem; font-weight: 700;
+  color: rgba(255,255,255,0.3);
+  text-transform: uppercase; letter-spacing: 0.7px;
+  padding: 16px 20px 8px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+.sv2-club-detail__feed { padding: 0 16px 16px; }
+.sv2-club-detail__feed-empty {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 32px 0; text-align: center; gap: 6px;
+}
+.sv2-club-detail__feed-empty span { font-size: 2.5rem; opacity: 0.4; }
+.sv2-club-detail__feed-empty p { font-size: 1.3rem; color: rgba(255,255,255,0.4); margin: 0; }
+.sv2-club-detail__feed-sub { font-size: 1.1rem !important; color: rgba(255,255,255,0.25) !important; }
+.sv2-club-detail__members { padding: 0 0 80px; }

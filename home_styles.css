@@ -1022,7 +1022,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
+  flex-wrap: nowrap;
 }
 .home-greeting__text-wrap {
   flex: 1;
@@ -1044,10 +1045,10 @@
 
 /* Profile avatar button */
 .home-greeting__profile-btn {
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.12);
+  border: 1.5px solid rgba(255,255,255,0.12);
   background: rgba(255,255,255,0.06);
   color: rgba(255,255,255,0.5);
   cursor: pointer;
@@ -1684,16 +1685,16 @@
 .home-greeting__actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
 /* Bell button */
 .home-greeting__bell-btn {
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.12);
+  border: 1.5px solid rgba(255,255,255,0.12);
   background: rgba(255,255,255,0.06);
   color: rgba(255,255,255,0.7);
   cursor: pointer;
@@ -2075,7 +2076,7 @@
 
 /* ── Search button in greeting ── */
 .home-greeting__search-btn {
-  width: 44px; height: 44px;
+  width: 36px; height: 36px;
   border-radius: 50%;
   border: 2px solid rgba(255,255,255,0.12);
   background: rgba(255,255,255,0.06);
