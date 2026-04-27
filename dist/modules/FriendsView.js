@@ -183,63 +183,55 @@ export class FriendsView {
       </div>
     </div>`;
     }
-    async _precacheInviteLink() {
-        if (this._cachingLink)
-            return;
-        this._cachingLink = true;
+    _precacheInviteLink() {
         const name = getUserName();
         const base = window.location.href.split('#')[0];
-        // Ustaw base64 link NATYCHMIAST — zawsze dostępny gdy user kliknie
-        const buildBase64 = (s) => `${base}#invite=${btoa(JSON.stringify({
+        // STEP 1: Set base64 link IMMEDIATELY — always available, no async needed
+        const userId = localStorage.getItem('mapyou_userId_profile') ?? String(Date.now());
+        const fallbackPayload = {
             name,
-            pushSub: s?.toJSON() ?? {
-                endpoint: `local:${localStorage.getItem('mapyou_userId_profile') ?? Date.now()}`,
+            pushSub: {
+                endpoint: `local:${userId}`,
                 expirationTime: null,
                 keys: { p256dh: '', auth: '' },
             },
-        }))}`;
-        // Znajdź push sub z krótkim timeoutem
-        let sub = null;
-        try {
-            const regs = await Promise.race([
-                navigator.serviceWorker.getRegistrations(),
-                new Promise(r => setTimeout(() => r([]), 800)),
-            ]);
-            for (const reg of regs) {
-                sub = await reg.pushManager.getSubscription();
-                if (sub)
-                    break;
-            }
-        }
-        catch { }
-        // Ustaw base64 od razu (natychmiast dostępny)
-        this._cachedInviteLink = buildBase64(sub);
-        this._cachingLink = false;
-        // Spróbuj zastąpić krótkim linkiem z backendu w tle (bez blokowania)
-        if (sub) {
-            void (async () => {
-                try {
-                    const subJson = sub.toJSON();
-                    const short = await Promise.race([
-                        generateInviteLink(name, subJson, BACKEND_URL),
-                        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 3000)),
-                    ]);
-                    this._cachedInviteLink = short; // nadpisz krótkim jeśli backend odpowiedział
+        };
+        this._cachedInviteLink = `${base}#invite=${btoa(JSON.stringify(fallbackPayload))}`;
+        // STEP 2: Try to upgrade to short backend link in background (no blocking)
+        void (async () => {
+            try {
+                const regs = await Promise.race([
+                    navigator.serviceWorker.getRegistrations(),
+                    new Promise(r => setTimeout(() => r([]), 1000)),
+                ]);
+                let sub = null;
+                for (const reg of regs) {
+                    sub = await reg.pushManager.getSubscription();
+                    if (sub)
+                        break;
                 }
-                catch { /* zostaje base64 */ }
-            })();
-        }
+                if (!sub)
+                    return;
+                const subJson = sub.toJSON();
+                const short = await Promise.race([
+                    generateInviteLink(name, subJson, BACKEND_URL),
+                    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 3000)),
+                ]);
+                this._cachedInviteLink = short; // upgrade to short link
+            }
+            catch { /* keep base64 fallback */ }
+        })();
     }
     _shareMyLink() {
         const name = getUserName();
         const link = this._cachedInviteLink;
+        // link is ALWAYS set (base64 built synchronously in _precacheInviteLink)
         if (!link) {
-            // Still generating — show toast and try again in 1s
             this._showToast('Generating link... ⏳');
-            setTimeout(() => this._shareMyLink(), 1000);
+            setTimeout(() => this._shareMyLink(), 200);
             return;
         }
-        // Call share SYNCHRONOUSLY in user gesture context (required by iOS)
+        // Call share SYNCHRONOUSLY to preserve user gesture on mobile
         if (navigator.share) {
             void navigator.share({
                 title: `Add ${name} on MapYou`,
