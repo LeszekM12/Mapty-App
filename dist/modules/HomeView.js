@@ -10,7 +10,7 @@ import { openPostModal } from './PostModal.js';
 import { openSaveActivityModal } from './SaveActivityModal.js';
 import { saveUnifiedWorkout } from './UnifiedWorkout.js';
 import { statsView } from './StatsView.js';
-import { loadPosts } from './db.js';
+import { loadPosts, savePost, deletePost } from './db.js';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function relativeDate(timestamp) {
     const diff = Date.now() - timestamp;
@@ -238,7 +238,7 @@ function openLightbox(src) {
         close(); }, { once: true });
 }
 // ── Post card builder ─────────────────────────────────────────────────────────
-function buildPostCard(post) {
+function buildPostCard(post, onRefresh) {
     const card = document.createElement('article');
     card.className = 'home-card home-card--post';
     card.dataset.id = post.id;
@@ -248,6 +248,14 @@ function buildPostCard(post) {
     const photoHtml = post.photoUrl
         ? `<div class="home-card__photo" data-photosrc="${post.photoUrl}"><img src="${post.photoUrl}" alt="" loading="lazy"/></div>`
         : '';
+    // Truncate body at 250 chars
+    const TRUNC = 250;
+    const isLong = (post.body?.length ?? 0) > TRUNC;
+    const bodyHtml = post.body ? `
+    <p class="home-card__desc home-card__post-body" id="pbody-${post.id}">
+      ${isLong ? post.body.slice(0, TRUNC) + '…' : post.body}
+    </p>
+    ${isLong ? `<button class="home-card__read-more" id="pmore-${post.id}">…więcej</button>` : ''}` : '';
     card.innerHTML = `
     <div class="home-card__header">
       <div class="home-card__avatar home-card__avatar--user">${avatarHtml}</div>
@@ -255,12 +263,14 @@ function buildPostCard(post) {
         <h3 class="home-card__name">${post.authorName}</h3>
         <span class="home-card__time">${relativeDate(post.date)}</span>
       </div>
-      <span class="home-card__post-badge">Post</span>
+      <div class="home-card__post-actions">
+        <span class="home-card__post-badge">Post</span>
+        <button class="home-card__post-menu-btn" id="pmenu-${post.id}" aria-label="Post options">⋯</button>
+      </div>
     </div>
 
     ${post.title ? `<h4 class="home-card__post-title">${post.title}</h4>` : ''}
-    ${post.body ? `<p class="home-card__desc">${post.body}</p>` : ''}
-
+    ${bodyHtml}
     ${photoHtml}
 
     <div class="home-card__footer" style="border-top:1px solid rgba(255,255,255,0.06)">
@@ -277,6 +287,55 @@ function buildPostCard(post) {
         <span class="home-card__action-count" data-comment-count="p_${post.id}">0</span>
       </button>
     </div>`;
+    // …więcej toggle
+    if (isLong) {
+        let expanded = false;
+        card.querySelector(`#pmore-${post.id}`)?.addEventListener('click', e => {
+            e.stopPropagation();
+            expanded = !expanded;
+            const bodyEl = card.querySelector(`#pbody-${post.id}`);
+            const moreBtn = card.querySelector(`#pmore-${post.id}`);
+            if (bodyEl)
+                bodyEl.textContent = expanded ? post.body : post.body.slice(0, TRUNC) + '…';
+            if (moreBtn)
+                moreBtn.textContent = expanded ? 'mniej' : '…więcej';
+        });
+    }
+    // ⋯ menu — edit / delete
+    card.querySelector(`#pmenu-${post.id}`)?.addEventListener('click', e => {
+        e.stopPropagation();
+        // Remove existing menu
+        card.querySelector('.home-card__post-menu')?.remove();
+        const menu = document.createElement('div');
+        menu.className = 'home-card__post-menu';
+        menu.innerHTML = `
+      <button class="home-card__post-menu-item" data-pm="edit">✏️ Edit</button>
+      <button class="home-card__post-menu-item home-card__post-menu-item--del" data-pm="delete">🗑 Delete</button>`;
+        card.querySelector('.home-card__post-actions')?.appendChild(menu);
+        requestAnimationFrame(() => menu.classList.add('home-card__post-menu--open'));
+        // Edit
+        menu.querySelector('[data-pm="edit"]')?.addEventListener('click', ev => {
+            ev.stopPropagation();
+            menu.remove();
+            _openEditPostModal(post, onRefresh);
+        });
+        // Delete
+        menu.querySelector('[data-pm="delete"]')?.addEventListener('click', async (ev) => {
+            ev.stopPropagation();
+            menu.remove();
+            if (!confirm('Delete this post?'))
+                return;
+            await deletePost(post.id);
+            onRefresh();
+        });
+        // Close on outside click
+        setTimeout(() => {
+            document.addEventListener('click', function h() {
+                menu.remove();
+                document.removeEventListener('click', h);
+            });
+        }, 50);
+    });
     // Wire like
     card.querySelector('[data-action="like"]')?.addEventListener('click', e => {
         e.stopPropagation();
@@ -324,6 +383,63 @@ function buildPostCard(post) {
     }
     card.addEventListener('click', e => { e.stopPropagation(); });
     return card;
+}
+// ── Edit post modal ───────────────────────────────────────────────────────────
+function _openEditPostModal(post, onSave) {
+    document.getElementById('editPostModal')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'editPostModal';
+    overlay.className = 'pm-overlay';
+    overlay.innerHTML = `
+    <div class="pm-sheet" id="editPostSheet">
+      <div class="pm-handle"></div>
+      <div class="pm-header">
+        <h2 class="pm-header__title">Edit Post</h2>
+        <button class="pm-close" id="epmClose">✕</button>
+      </div>
+      <div class="pm-body">
+        <div class="pm-field">
+          <label class="pm-label" for="epmTitle">Title</label>
+          <input class="pm-input" id="epmTitle" type="text" maxlength="20"
+            value="${post.title ?? ''}" autocomplete="off"/>
+        </div>
+        <div class="pm-field">
+          <label class="pm-label" for="epmDesc">
+            Description
+            <span class="pm-char-count" id="epmCount">${(post.body ?? '').length}/500</span>
+          </label>
+          <textarea class="pm-textarea" id="epmDesc" rows="6" maxlength="500">${post.body ?? ''}</textarea>
+        </div>
+      </div>
+      <div class="pm-footer">
+        <button class="pm-btn pm-btn--cancel" id="epmCancel">Cancel</button>
+        <button class="pm-btn pm-btn--post" id="epmSave">Save</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => {
+        overlay.classList.add('pm-overlay--visible');
+        setTimeout(() => overlay.querySelector('#editPostSheet')?.classList.add('pm-sheet--open'), 10);
+    });
+    const close = () => {
+        overlay.querySelector('#editPostSheet')?.classList.remove('pm-sheet--open');
+        overlay.classList.remove('pm-overlay--visible');
+        setTimeout(() => overlay.remove(), 350);
+    };
+    overlay.querySelector('#epmClose')?.addEventListener('click', close);
+    overlay.querySelector('#epmCancel')?.addEventListener('click', close);
+    overlay.addEventListener('click', e => { if (e.target === overlay)
+        close(); });
+    const descEl = overlay.querySelector('#epmDesc');
+    const countEl = overlay.querySelector('#epmCount');
+    descEl.addEventListener('input', () => { countEl.textContent = `${descEl.value.length}/500`; });
+    overlay.querySelector('#epmSave')?.addEventListener('click', async () => {
+        const title = (overlay.querySelector('#epmTitle')?.value ?? '').trim();
+        const body = descEl.value.trim();
+        await savePost({ ...post, title, body });
+        close();
+        onSave();
+    });
 }
 // ── Card builder ──────────────────────────────────────────────────────────────
 function buildCard(act) {
@@ -801,7 +917,7 @@ export class HomeView {
                 card = buildCard(item.data);
             }
             else {
-                card = buildPostCard(item.data);
+                card = buildPostCard(item.data, () => void this.render());
             }
             card.style.animationDelay = `${idx * 60}ms`;
             scroll.appendChild(card);

@@ -1896,3 +1896,77 @@
 
 /* sam-char-count reuses pm-char-count style */
 .sam-char-count { font-size: 1rem; font-weight: 400; color: rgba(255,255,255,0.2); text-transform: none; letter-spacing: 0; margin-left: auto; }
+
+
+/* ── Post card — menu, read-more ── */
+.home-card__post-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+.home-card__post-menu-btn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.4);
+  font-size: 1.6rem;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 8px;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+}
+.home-card__post-menu-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+
+.home-card__post-menu {
+  position: absolute;
+  top: 28px;
+  right: 0;
+  z-index: 100;
+  background: #242a30;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  overflow: hidden;
+  opacity: 0;
+  transform: scale(0.92) translateY(-6px);
+  transform-origin: top right;
+  transition: opacity 0.18s, transform 0.18s cubic-bezier(0.34,1.56,0.64,1);
+  pointer-events: none;
+  min-width: 140px;
+}
+.home-card__post-menu--open {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: all;
+}
+.home-card__post-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--color-light--1, #ccc);
+  font-size: 1.3rem;
+  font-family: inherit;
+  padding: 12px 16px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+.home-card__post-menu-item:hover { background: rgba(255,255,255,0.07); }
+.home-card__post-menu-item--del { color: #f87171; }
+.home-card__post-menu-item--del:hover { background: rgba(248,113,113,0.1); }
+
+/* Read more button */
+.home-card__read-more {
+  background: none;
+  border: none;
+  color: var(--color-brand--2, #00c46a);
+  font-size: 1.25rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0 16px 10px;
+  font-family: inherit;
+  display: block;
+}
