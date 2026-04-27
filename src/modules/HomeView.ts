@@ -13,7 +13,7 @@ import {
 import { profileView } from './ProfileView.js';
 import { openPostModal } from './PostModal.js';
 import { openSaveActivityModal } from './SaveActivityModal.js';
-import { saveUnifiedWorkout, type UnifiedWorkout } from './UnifiedWorkout.js';
+import { loadUnifiedWorkouts, saveUnifiedWorkout, type UnifiedWorkout } from './UnifiedWorkout.js';
 import { statsView } from './StatsView.js';
 import { loadPosts, savePost, deletePost, type PostRecord } from './db.js';
 
@@ -735,6 +735,7 @@ function _openNotifPanel(): void {
 export class HomeView {
   private container: HTMLElement | null = null;
   private _inited = false;
+  private _workouts: UnifiedWorkout[] = [];
 
   init(): void {
     this.container = document.querySelector('#tabHome .home-scroll');
@@ -938,6 +939,60 @@ export class HomeView {
     return greeting;
   }
 
+  private _buildStreakWidget(): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'home-streak';
+
+    // Compute streak from unifiedWorkouts
+    const workoutDates = new Set(this._workouts.map(w => {
+      const d = new Date(typeof w.date === 'number' ? w.date : w.date);
+      return d.toDateString();
+    }));
+    // Also include enriched activities dates
+    let streak = 0;
+    const today = new Date(); today.setHours(0,0,0,0);
+    for (let i = 0; i < 365; i++) {
+      const d = new Date(today); d.setDate(today.getDate() - i);
+      if (workoutDates.has(d.toDateString())) streak++;
+      else break;
+    }
+
+    const DAY_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const days: Array<{label: string; active: boolean; isToday: boolean}> = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today); d.setDate(today.getDate() - i);
+      days.push({
+        label:   DAY_LABELS[d.getDay()],
+        active:  workoutDates.has(d.toDateString()),
+        isToday: i === 0,
+      });
+    }
+
+    wrap.innerHTML = `
+      <div class="home-streak__inner">
+        <div class="home-streak__flame-wrap">
+          <svg class="home-streak__flame" viewBox="0 0 24 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C12 2 7 8 7 13.5C7 16.5376 9.46243 19 12 19C14.5376 19 17 16.5376 17 13.5C17 11 15 9 15 9C15 9 15 11.5 13 12.5C13 12.5 14 10 12 8C12 8 12 10.5 10.5 11.5C10.5 11.5 9 10 9 8C7.5 10 7 11.5 7 13.5" fill="#f97316" opacity="0.9"/>
+            <path d="M12 30C12 30 5 22 5 15C5 10.5 8 6 12 4C12 4 10 9 12 12C14 9 15 6 15 6C17 9 19 12 19 15C19 22 12 30 12 30Z" fill="#f97316"/>
+            <path d="M12 28C12 28 7 21 7 16C7 13 9 10.5 12 9C12 9 11 13 13 15C13 15 11 12 14 11C15 13 16 15 16 17C16 21 12 28 12 28Z" fill="#fb923c" opacity="0.7"/>
+          </svg>
+          <span class="home-streak__count">${streak}</span>
+        </div>
+        <div class="home-streak__right">
+          <div class="home-streak__title">${streak === 0 ? 'Start your streak!' : streak === 1 ? '1-day streak 🔥' : `${streak}-day streak 🔥`}</div>
+          <div class="home-streak__dots">
+            ${days.map(d => `
+              <div class="home-streak__day">
+                <div class="home-streak__dot${d.active ? ' home-streak__dot--active' : ''}${d.isToday ? ' home-streak__dot--today' : ''}"></div>
+                <span class="home-streak__day-label${d.isToday ? ' home-streak__day-label--today' : ''}">${d.label}</span>
+              </div>`).join('')}
+          </div>
+        </div>
+      </div>`;
+
+    return wrap;
+  }
+
   async render(): Promise<void> {
     // Always re-query container — it may have been null when init() was first called
     this.container = document.querySelector<HTMLElement>('#tabHome .home-scroll');
@@ -947,15 +1002,20 @@ export class HomeView {
 
     scroll.innerHTML = '<div class="home-loading"><div class="home-loading__spinner"></div></div>';
 
-    const [activities, posts] = await Promise.all([
+    const [activities, posts, workouts] = await Promise.all([
       loadEnrichedActivities(),
       loadPosts(),
+      loadUnifiedWorkouts(),
     ]);
+    this._workouts = workouts;
 
     scroll.innerHTML = '';
 
     // Greeting always rendered — regardless of activity count
     scroll.appendChild(this._buildGreeting(activities.length + posts.length));
+
+    // Streak widget
+    scroll.appendChild(this._buildStreakWidget());
 
     // Merge activities + posts sorted by date desc
     type FeedItem =
