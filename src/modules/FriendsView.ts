@@ -64,7 +64,7 @@ export class FriendsView {
     }
 
     // Podpnij przyciski
-    document.getElementById('btnShareMyLink')?.addEventListener('click', () => this._shareMyLink());
+    document.getElementById('btnShareMyLink')?.addEventListener('click', this._shareMyLink.bind(this));
     // Pre-generate invite link in background so it's ready when user taps
     void this._precacheInviteLink();
     document.getElementById('btnAddFriend')?.addEventListener('click',  () => this._showAddFriendModal());
@@ -234,26 +234,27 @@ export class FriendsView {
 
   private _shareMyLink(): void {
     const name = getUserName();
-
-    // FIX: Always use cached link or build fallback synchronously.
-    // Never defer with setTimeout — iOS/Safari requires navigator.share()
-    // to be called synchronously within the user gesture handler.
+    // Build link synchronously — NEVER await anything before navigator.share()
+    // navigator.share() MUST be called in the same call stack as the user gesture
     const link = this._cachedInviteLink ?? this._buildFallbackLink(name);
 
-    if (navigator.share) {
-      void navigator.share({
+    if (typeof navigator.share === 'function') {
+      // Call share() directly — no await, no .then() before the call
+      navigator.share({
         title: `Add ${name} on MapYou`,
         text:  `${name} invited you to track their workouts live! 🏃`,
         url:   link,
-      }).catch(err => {
-        if ((err as Error).name !== 'AbortError') {
-          void navigator.clipboard.writeText(link)
+      }).catch((err: Error) => {
+        if (err.name !== 'AbortError') {
+          // Share failed — copy to clipboard as fallback
+          navigator.clipboard?.writeText(link)
             .then(() => this._showToast('Invite link copied! 📋'))
-            .catch(() => this._showToast('Could not share — try again'));
+            .catch(() => this._showToast(link.slice(0, 60) + '…'));
         }
       });
     } else {
-      void navigator.clipboard.writeText(link)
+      // Desktop fallback — copy to clipboard
+      navigator.clipboard?.writeText(link)
         .then(() => this._showToast('Invite link copied! 📋'))
         .catch(() => this._showToast('Could not share — try again'));
     }
