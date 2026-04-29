@@ -1,17 +1,5 @@
 // ─── SYNC TO MONGODB + CLOUDINARY ────────────────────────────────────────────
 // src/modules/syncToMongo.ts
-//
-// Jednorazowa migracja danych z IndexedDB → MongoDB Atlas przez backend.
-// Zdjęcia (base64) są uploadowane do Cloudinary przed zapisem do Atlas.
-// W bazie zostają tylko URL-e do zdjęć — nie base64.
-//
-// Kolejność:
-//   1. Sprawdź flagę localStorage — jeśli synced, wyjdź
-//   2. Sprawdź czy backend żyje
-//   3. Sprawdź czy dane są już w Atlas
-//   4. Upload zdjęć do Cloudinary → zamień base64 na URL
-//   5. Wyślij dane do /migrate/bulk
-//   6. Ustaw flagę
 
 import { BACKEND_URL } from '../config.js';
 import {
@@ -21,100 +9,83 @@ import {
   loadUnifiedWorkouts,
   loadPosts,
   loadProfileFromDB,
+  db,
   type EnrichedActivity,
   type PostRecord,
   type ProfileRecord,
 } from './db.js';
 import { getUserId } from './PushNotifications.js';
 
-// ── Stałe ─────────────────────────────────────────────────────────────────────
-
 const LS_SYNCED_KEY  = 'mapyou_mongo_synced';
 const LS_SYNC_FAILED = 'mapyou_mongo_sync_failed_at';
 const RETRY_AFTER_MS = 5 * 60 * 1000;
 
-// ── Upload zdjęcia do Cloudinary przez backend ────────────────────────────────
+async function waitForDexie(timeoutMs = 10_000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      await db.open();
+      return true;
+    } catch {
+      await new Promise(r => setTimeout(r, 300));
+    }
+  }
+  console.warn('[Sync] Dexie not ready after timeout');
+  return false;
+}
 
 async function uploadImageToCloudinary(
-  base64:   string,
-  userId:   string,
-  folder:   'activities' | 'posts' | 'avatars',
+  base64: string, userId: string,
+  folder: 'activities' | 'posts' | 'avatars',
   publicId?: string,
 ): Promise<string | null> {
-  // Nie uploaduj jeśli to już URL (zostało wcześniej uploadowane)
   if (!base64 || !base64.startsWith('data:image/')) return base64 || null;
-
   try {
     const res = await fetch(`${BACKEND_URL}/upload/image`, {
-      method:  'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ image: base64, userId, folder, publicId }),
-      signal:  AbortSignal.timeout(30_000),
+      body: JSON.stringify({ image: base64, userId, folder, publicId }),
+      signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) return null;
     const data = await res.json() as { status: string; url: string };
     return data.status === 'ok' ? data.url : null;
-  } catch {
-    return null;  // Nie blokuj migracji jeśli upload się nie powiedzie
-  }
+  } catch { return null; }
 }
 
-// ── Zamień base64 na URL we wszystkich kolekcjach ─────────────────────────────
-
 async function migratePhotos(
-  userId:             string,
+  userId: string,
   enrichedActivities: EnrichedActivity[],
-  posts:              PostRecord[],
-  profile:            ProfileRecord | null,
-): Promise<{
-  enrichedActivities: EnrichedActivity[];
-  posts:              PostRecord[];
-  profile:            ProfileRecord | null;
-}> {
-  console.log('[Sync] 🖼  Uploading photos to Cloudinary...');
-
-  // EnrichedActivities — photoUrl
+  posts: PostRecord[],
+  profile: ProfileRecord | null,
+) {
+  console.log('[Sync] Uploading photos to Cloudinary...');
   const migratedActivities = await Promise.all(
-    enrichedActivities.map(async (activity) => {
-      if (!activity.photoUrl?.startsWith('data:image/')) return activity;
-      const url = await uploadImageToCloudinary(
-        activity.photoUrl, userId, 'activities',
-      );
-      return { ...activity, photoUrl: url };
+    enrichedActivities.map(async (a) => {
+      if (!a.photoUrl?.startsWith('data:image/')) return a;
+      const url = await uploadImageToCloudinary(a.photoUrl, userId, 'activities');
+      return { ...a, photoUrl: url };
     }),
   );
-
-  // Posts — photoUrl
   const migratedPosts = await Promise.all(
-    posts.map(async (post) => {
-      if (!post.photoUrl?.startsWith('data:image/')) return post;
-      const url = await uploadImageToCloudinary(
-        post.photoUrl, userId, 'posts',
-      );
-      return { ...post, photoUrl: url };
+    posts.map(async (p) => {
+      if (!p.photoUrl?.startsWith('data:image/')) return p;
+      const url = await uploadImageToCloudinary(p.photoUrl, userId, 'posts');
+      return { ...p, photoUrl: url };
     }),
   );
-
-  // Profile — avatarB64 (stały public_id — nie tworzy duplikatów)
   let migratedProfile = profile;
   if (profile?.avatarB64?.startsWith('data:image/')) {
     const url = await uploadImageToCloudinary(
       profile.avatarB64, userId, 'avatars',
-      `mapyou/avatars/${userId}/avatar`,  // zawsze ten sam plik
+      `mapyou/avatars/${userId}/avatar`,
     );
     migratedProfile = url
       ? { ...profile, avatarB64: null, avatarUrl: url } as unknown as ProfileRecord
       : profile;
   }
-
-  return {
-    enrichedActivities: migratedActivities as EnrichedActivity[],
-    posts:              migratedPosts       as PostRecord[],
-    profile:            migratedProfile,
-  };
+  return { enrichedActivities: migratedActivities as EnrichedActivity[], posts: migratedPosts as PostRecord[], profile: migratedProfile };
 }
-
-// ── Główna funkcja ────────────────────────────────────────────────────────────
 
 export async function syncToMongoIfNeeded(): Promise<void> {
   if (localStorage.getItem(LS_SYNCED_KEY) === 'true') return;
@@ -123,96 +94,79 @@ export async function syncToMongoIfNeeded(): Promise<void> {
   if (lastFailed > 0 && Date.now() - lastFailed < RETRY_AFTER_MS) return;
 
   const userId = getUserId();
+  console.log(`[Sync] Starting for userId=${userId}`);
+
+  const dexieReady = await waitForDexie();
+  if (!dexieReady) { _markFailed(); return; }
+  console.log('[Sync] Dexie ready');
 
   try {
-    // Krok 1 — Backend żyje?
-    const healthRes = await fetch(`${BACKEND_URL}/health`, {
-      signal: AbortSignal.timeout(5000),
-    });
+    const healthRes = await fetch(`${BACKEND_URL}/health`, { signal: AbortSignal.timeout(8000) });
     if (!healthRes.ok) { _markFailed(); return; }
+    console.log('[Sync] Backend alive');
 
-    // Krok 2 — Dane już w Atlas?
     const statusRes = await fetch(
       `${BACKEND_URL}/migrate/status/${encodeURIComponent(userId)}`,
-      { signal: AbortSignal.timeout(5000) },
+      { signal: AbortSignal.timeout(8000) },
     );
     if (!statusRes.ok) { _markFailed(); return; }
 
-    const statusData = await statusRes.json() as {
-      status: string;
-      counts: Record<string, number>;
-    };
+    const statusData = await statusRes.json() as { status: string; counts: Record<string, number> };
     const totalInAtlas = Object.values(statusData.counts).reduce((a, b) => a + b, 0);
+    console.log(`[Sync] Atlas has ${totalInAtlas} records for this user`);
 
     if (totalInAtlas > 0) {
       _markSynced();
-      console.log(`[Sync] ✅ Already in MongoDB Atlas (${totalInAtlas} records)`);
+      console.log(`[Sync] Already synced (${totalInAtlas} records)`);
       return;
     }
 
-    // Krok 3 — Pobierz dane z IndexedDB
     const [workouts, activities, enrichedActivities, unifiedWorkouts, posts, profile] =
       await Promise.all([
-        loadWorkoutsFromDB(),
-        loadActivities(),
-        loadEnrichedActivities(),
-        loadUnifiedWorkouts(),
-        loadPosts(),
-        loadProfileFromDB(),
+        loadWorkoutsFromDB(), loadActivities(), loadEnrichedActivities(),
+        loadUnifiedWorkouts(), loadPosts(), loadProfileFromDB(),
       ]);
 
-    const totalLocal =
-      workouts.length + activities.length +
-      enrichedActivities.length + unifiedWorkouts.length + posts.length;
+    console.log(`[Sync] IndexedDB: workouts=${workouts.length} activities=${activities.length} enriched=${enrichedActivities.length} unified=${unifiedWorkouts.length} posts=${posts.length}`);
+
+    const totalLocal = workouts.length + activities.length + enrichedActivities.length + unifiedWorkouts.length + posts.length;
 
     if (totalLocal === 0) {
       _markSynced();
-      console.log('[Sync] ✅ No local data — new user');
+      console.log('[Sync] IndexedDB empty — nothing to migrate');
       return;
     }
 
-    console.log(`[Sync] 🔄 Migrating ${totalLocal} records...`);
+    console.log(`[Sync] Migrating ${totalLocal} records...`);
 
-    // Krok 4 — Upload zdjęć do Cloudinary (zamień base64 → URL)
     const { enrichedActivities: migratedActivities, posts: migratedPosts, profile: migratedProfile } =
       await migratePhotos(userId, enrichedActivities, posts, profile);
 
-    // Krok 5 — Wyślij do Atlas
     const migrateRes = await fetch(`${BACKEND_URL}/migrate/bulk`, {
-      method:  'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({
-        userId,
-        workouts,
-        activities,
+      body: JSON.stringify({
+        userId, workouts, activities,
         enrichedActivities: migratedActivities,
-        unifiedWorkouts,
-        posts:   migratedPosts,
+        unifiedWorkouts, posts: migratedPosts,
         profile: migratedProfile ?? undefined,
       }),
-      signal: AbortSignal.timeout(60_000), // 60s — może być dużo danych
+      signal: AbortSignal.timeout(60_000),
     });
 
-    if (!migrateRes.ok) { _markFailed(); return; }
+    if (!migrateRes.ok) { console.error('[Sync] migrate/bulk failed:', migrateRes.status); _markFailed(); return; }
 
-    const migrateData = await migrateRes.json() as {
-      status: string; summary: Record<string, number>;
-    };
-
+    const migrateData = await migrateRes.json() as { status: string; summary: Record<string, number> };
     if (migrateData.status === 'ok') {
       _markSynced();
-      console.log('[Sync] ✅ Migration complete:', migrateData.summary);
-    } else {
-      _markFailed();
-    }
+      console.log('[Sync] Migration complete:', migrateData.summary);
+    } else { _markFailed(); }
 
   } catch (err) {
     _markFailed();
-    console.warn('[Sync] ⚠️  Backend unavailable, retry in 5 min:', err);
+    console.warn('[Sync] Error:', err);
   }
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function _markSynced(): void {
   localStorage.setItem(LS_SYNCED_KEY, 'true');
@@ -226,7 +180,7 @@ function _markFailed(): void {
 export function resetSyncFlag(): void {
   localStorage.removeItem(LS_SYNCED_KEY);
   localStorage.removeItem(LS_SYNC_FAILED);
-  console.log('[Sync] 🔄 Sync flag reset — will migrate on next load');
+  console.log('[Sync] Sync flag reset');
 }
 
 (window as unknown as Record<string, unknown>).resetSync = resetSyncFlag;
