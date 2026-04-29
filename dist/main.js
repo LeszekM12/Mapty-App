@@ -2432,6 +2432,13 @@ void showNameModalIfNeeded();
 document.getElementById('btnChangeName')?.addEventListener('click', () => {
     openChangeNameModal();
 });
+// ─── Sync to cloud button (Settings) ─────────────────────────────────────────
+document.getElementById('settingSync')?.addEventListener('click', () => {
+    localStorage.removeItem('mapyou_mongo_synced');
+    localStorage.removeItem('mapyou_mongo_sync_failed_at');
+    void syncToMongoIfNeeded();
+    alert('Sync started! Check console for progress.');
+});
 // ─── Sync do MongoDB Atlas (jednorazowa migracja z IndexedDB) ───────────────
 void syncToMongoIfNeeded();
 //# sourceMappingURL=main.js.map
