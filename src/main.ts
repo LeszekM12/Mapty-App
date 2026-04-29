@@ -44,6 +44,7 @@ import { FriendsView }          from './modules/FriendsView.js';
 import { showNameModalIfNeeded, openChangeNameModal } from './modules/UserName.js';
 import { initUserProfile } from './modules/UserProfile.js';
 import { syncToMongoIfNeeded } from './modules/syncToMongo.js';
+import { CS } from './modules/cloudSync.js';
 
 // ─── Leaflet plugin types ─────────────────────────────────────────────────────
 
@@ -765,8 +766,8 @@ class App {
               ? [_wm.coords as import('./types/index.js').Coords]  // single point [lat,lng] → wrap in array
               : []),
       };
-      void saveEnrichedActivity(_wmEnriched);
-      void saveUnifiedWorkout({
+      void CS.saveEnrichedActivity(_wmEnriched);
+      void CS.saveUnifiedWorkout({
         ..._wmEnriched,
         type:     _wmType,
         source:   'manual' as const,
@@ -854,8 +855,8 @@ class App {
             ? [_w.coords as import('./types/index.js').Coords]
             : []),
     };
-    void saveEnrichedActivity(_enriched);
-    void saveUnifiedWorkout({
+    void CS.saveEnrichedActivity(_enriched);
+    void CS.saveUnifiedWorkout({
       ..._enriched,
       type:     _wType,
       source:   'manual' as const,
@@ -1080,7 +1081,7 @@ class App {
       el.style.transform = 'translateX(-110%)'; el.style.opacity = '0';
       setTimeout(() => el.remove(), 300);
     }
-    void deleteWorkoutFromDB(id);
+    void CS.deleteWorkout(id);
     this._renderStats(); this._renderStreak();
     void sendWorkoutDeletedPush();
   }
@@ -1089,7 +1090,7 @@ class App {
     // Zapisuje ostatnio dodany workout do IndexedDB
     // (wywoływane po każdym push do #workouts)
     const last = this.#workouts[this.#workouts.length - 1];
-    if (last) void saveWorkoutToDB(last.toJSON() as unknown as Record<string, unknown>);
+    if (last) void CS.saveWorkout(last.toJSON() as unknown as Record<string, unknown>);
   }
 
   async _getLocalStorage(): Promise<void> {
@@ -1234,9 +1235,9 @@ class App {
         openSaveActivityModal(activity,
           // onSave
           async (enriched) => {
-            await saveActivity(activity);
+            await CS.saveActivity(activity);
             // Save to unified for Stats → Progress
-            await saveUnifiedWorkout({
+            await CS.saveUnifiedWorkout({
               id:          enriched.id,
               type:        enriched.sport as import('./modules/UnifiedWorkout.js').WorkoutType,
               source:      'tracking',
@@ -2238,3 +2239,6 @@ document.getElementById('settingSync')?.addEventListener('click', async () => {
 
 // ─── Sync do MongoDB Atlas (jednorazowa migracja z IndexedDB) ───────────────
 void syncToMongoIfNeeded();
+
+// ─── Hydratacja — pobierz dane z Atlas do IndexedDB jeśli puste ──────────────
+void CS.hydrate();

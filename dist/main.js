@@ -21,21 +21,21 @@ import { WorkoutType } from './types/index.js';
 import { NetState, showSkeleton, startMapTimeout, initOnlineDetector, initRetryBtn, } from './modules/OfflineDetector.js';
 import { initWeatherComponents, switchToGPSWeather } from './modules/initWeatherComponents.js';
 import { getIPLocation, requestGPSPermission, subscribeToPermissionChanges, hasGPSPermission } from './modules/LocationService.js';
-import { loadWorkoutsFromDB, saveWorkoutToDB, deleteWorkoutFromDB, saveEnrichedActivity, clearAllWorkoutsFromDB, migrateLocalStorageToIndexedDB, } from './modules/db.js';
+import { loadWorkoutsFromDB, clearAllWorkoutsFromDB, migrateLocalStorageToIndexedDB, } from './modules/db.js';
 import { initPushNotifications, resubscribeIfNeeded, sendWorkoutAddedPush, sendWorkoutDeletedPush, sendWelcomeBackPush, sendLongBreakPush, sendArrivedAtDestinationPush, sendWeatherPush, } from './modules/PushNotifications.js';
 import { Tracker, formatDuration, formatPace, formatDistance, SPORT_COLORS } from './modules/Tracker.js';
 import { showGoodJobSplash, ActivityHistoryPanel } from './modules/ActivityView.js';
-import { saveActivity } from './modules/db.js';
 import { homeView } from './modules/HomeView.js';
 import { statsView } from './modules/StatsView.js';
 import { notifyActivityAdded } from './modules/NotificationsService.js';
-import { migrateToUnified, saveUnifiedWorkout } from './modules/UnifiedWorkout.js';
+import { migrateToUnified } from './modules/UnifiedWorkout.js';
 import { openSaveActivityModal } from './modules/SaveActivityModal.js';
 import { liveTracker } from './modules/LiveTracker.js';
 import { FriendsView } from './modules/FriendsView.js';
 import { showNameModalIfNeeded, openChangeNameModal } from './modules/UserName.js';
 import { initUserProfile } from './modules/UserProfile.js';
 import { syncToMongoIfNeeded } from './modules/syncToMongo.js';
+import { CS } from './modules/cloudSync.js';
 // ─── DOM refs (module-level, identical to script.js) ─────────────────────────
 const form = document.querySelector('.form');
 const containerWorkouts = document.querySelector('.workouts');
@@ -755,8 +755,8 @@ class App {
                         ? [_wm.coords] // single point [lat,lng] → wrap in array
                         : []),
             };
-            void saveEnrichedActivity(_wmEnriched);
-            void saveUnifiedWorkout({
+            void CS.saveEnrichedActivity(_wmEnriched);
+            void CS.saveUnifiedWorkout({
                 ..._wmEnriched,
                 type: _wmType,
                 source: 'manual',
@@ -845,8 +845,8 @@ class App {
                     ? [_w.coords]
                     : []),
         };
-        void saveEnrichedActivity(_enriched);
-        void saveUnifiedWorkout({
+        void CS.saveEnrichedActivity(_enriched);
+        void CS.saveUnifiedWorkout({
             ..._enriched,
             type: _wType,
             source: 'manual',
@@ -1114,7 +1114,7 @@ class App {
             el.style.opacity = '0';
             setTimeout(() => el.remove(), 300);
         }
-        void deleteWorkoutFromDB(id);
+        void CS.deleteWorkout(id);
         this._renderStats();
         this._renderStreak();
         void sendWorkoutDeletedPush();
@@ -1124,7 +1124,7 @@ class App {
         // (wywoływane po każdym push do #workouts)
         const last = __classPrivateFieldGet(this, _App_workouts, "f")[__classPrivateFieldGet(this, _App_workouts, "f").length - 1];
         if (last)
-            void saveWorkoutToDB(last.toJSON());
+            void CS.saveWorkout(last.toJSON());
     }
     async _getLocalStorage() {
         // Migruj dane z localStorage do IndexedDB (tylko raz, przy pierwszym uruchomieniu)
@@ -1283,9 +1283,9 @@ class App {
                 openSaveActivityModal(activity, 
                 // onSave
                 async (enriched) => {
-                    await saveActivity(activity);
+                    await CS.saveActivity(activity);
                     // Save to unified for Stats → Progress
-                    await saveUnifiedWorkout({
+                    await CS.saveUnifiedWorkout({
                         id: enriched.id,
                         type: enriched.sport,
                         source: 'tracking',
@@ -2471,4 +2471,6 @@ document.getElementById('settingSync')?.addEventListener('click', async () => {
 });
 // ─── Sync do MongoDB Atlas (jednorazowa migracja z IndexedDB) ───────────────
 void syncToMongoIfNeeded();
+// ─── Hydratacja — pobierz dane z Atlas do IndexedDB jeśli puste ──────────────
+void CS.hydrate();
 //# sourceMappingURL=main.js.map
