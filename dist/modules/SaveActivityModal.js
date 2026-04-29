@@ -5,7 +5,7 @@
 // User fills in name, description, photo, intensity, notes.
 // On save → writes EnrichedActivity to IndexedDB → triggers Home refresh.
 import { SPORT_COLORS, SPORT_ICONS } from './Tracker.js';
-import { saveEnrichedActivity } from './db.js';
+import { CS } from './cloudSync.js';
 import { getJoinedClubs, addToClubFeed } from './SearchView.js';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function blobToDataUrl(blob) {
@@ -542,7 +542,7 @@ export class SaveActivityModal {
                 ? [this._pickedCoords]
                 : this._activity.coords,
         };
-        await saveEnrichedActivity(enriched);
+        await CS.saveEnrichedActivity(enriched);
         // Share to selected clubs
         const checkedClubs = this._el?.querySelectorAll('.sam-club-check:checked') ?? [];
         const userName = localStorage.getItem('mapyou_userName') ?? 'Athlete';

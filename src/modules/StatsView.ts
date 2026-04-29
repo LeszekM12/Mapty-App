@@ -14,6 +14,7 @@ import {
 import {
   deleteEnrichedActivity, deleteActivity, deleteWorkoutFromDB,
 } from './db.js';
+import { CS } from './cloudSync.js';
 import { recordWeeklyGoalWin, getBestStreak } from './ProfileView.js';
 import { notifyWeeklyGoal } from './NotificationsService.js';
 
@@ -598,9 +599,9 @@ export class StatsView {
         // 2. Delete from ALL tables
         await Promise.all([
           deleteUnifiedWorkout(id).catch(() => {}),
-          deleteEnrichedActivity(id).catch(() => {}),
-          deleteActivity(id).catch(() => {}),
-          deleteWorkoutFromDB(id).catch(() => {}),
+          CS.deleteEnrichedActivity(id).catch(() => {}),
+          CS.deleteActivity(id).catch(() => {}),
+          CS.deleteWorkout(id).catch(() => {}),
         ]);
         // 3. Update local list + re-render
         this._workouts = this._workouts.filter(w => w.id !== id);

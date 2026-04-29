@@ -9,9 +9,10 @@ import { profileView, updateBestStreak } from './ProfileView.js';
 import { searchView } from './SearchView.js';
 import { openPostModal } from './PostModal.js';
 import { openSaveActivityModal } from './SaveActivityModal.js';
-import { loadUnifiedWorkouts, saveUnifiedWorkout } from './UnifiedWorkout.js';
+import { loadUnifiedWorkouts } from './UnifiedWorkout.js';
 import { statsView } from './StatsView.js';
-import { loadPosts, savePost, deletePost } from './db.js';
+import { loadPosts } from './db.js';
+import { CS } from './cloudSync.js';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function relativeDate(timestamp) {
     const diff = Date.now() - timestamp;
@@ -326,7 +327,7 @@ function buildPostCard(post, onRefresh) {
             menu.remove();
             if (!confirm('Delete this post?'))
                 return;
-            await deletePost(post.id);
+            await CS.deletePost(post.id);
             onRefresh();
         });
         // Close on outside click
@@ -437,7 +438,7 @@ function _openEditPostModal(post, onSave) {
     overlay.querySelector('#epmSave')?.addEventListener('click', async () => {
         const title = (overlay.querySelector('#epmTitle')?.value ?? '').trim();
         const body = descEl.value.trim();
-        await savePost({ ...post, title, body });
+        await CS.savePost({ ...post, title, body });
         close();
         onSave();
     });
@@ -798,7 +799,7 @@ export class HomeView {
                 // Fire in-app notification
                 notifyActivityAdded(enriched.name || enriched.description, enriched.distanceKm, enriched.sport);
                 // Save to unifiedWorkouts so Stats → Progress sees it immediately
-                await saveUnifiedWorkout({
+                await CS.saveUnifiedWorkout({
                     id: enriched.id,
                     type: enriched.sport,
                     source: 'manual',

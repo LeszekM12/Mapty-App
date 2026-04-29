@@ -17,6 +17,7 @@ import { openSaveActivityModal } from './SaveActivityModal.js';
 import { loadUnifiedWorkouts, saveUnifiedWorkout, type UnifiedWorkout } from './UnifiedWorkout.js';
 import { statsView } from './StatsView.js';
 import { loadPosts, savePost, deletePost, type PostRecord } from './db.js';
+import { CS } from './cloudSync.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -357,7 +358,7 @@ function buildPostCard(post: PostRecord, onRefresh: () => void): HTMLElement {
       ev.stopPropagation();
       menu.remove();
       if (!confirm('Delete this post?')) return;
-      await deletePost(post.id);
+      await CS.deletePost(post.id);
       onRefresh();
     });
 
@@ -476,7 +477,7 @@ function _openEditPostModal(post: PostRecord, onSave: () => void): void {
   overlay.querySelector('#epmSave')?.addEventListener('click', async () => {
     const title = (overlay.querySelector<HTMLInputElement>('#epmTitle')?.value ?? '').trim();
     const body  = descEl.value.trim();
-    await savePost({ ...post, title, body });
+    await CS.savePost({ ...post, title, body });
     close();
     onSave();
   });
@@ -845,7 +846,7 @@ export class HomeView {
           // Fire in-app notification
           notifyActivityAdded(enriched.name || enriched.description, enriched.distanceKm, enriched.sport);
           // Save to unifiedWorkouts so Stats → Progress sees it immediately
-          await saveUnifiedWorkout({
+          await CS.saveUnifiedWorkout({
             id:          enriched.id,
             type:        enriched.sport as import('./UnifiedWorkout.js').WorkoutType,
             source:      'manual',

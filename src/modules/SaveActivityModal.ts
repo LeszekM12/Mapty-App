@@ -8,6 +8,7 @@
 import type { ActivityRecord, SportType } from './Tracker.js';
 import { SPORT_COLORS, SPORT_ICONS } from './Tracker.js';
 import { saveEnrichedActivity, type EnrichedActivity } from './db.js';
+import { CS } from './cloudSync.js';
 import { getJoinedClubs, addToClubFeed } from './SearchView.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -509,7 +510,7 @@ export class SaveActivityModal {
         : this._activity.coords,
     };
 
-    await saveEnrichedActivity(enriched);
+    await CS.saveEnrichedActivity(enriched);
 
     // Share to selected clubs
     const checkedClubs = this._el?.querySelectorAll<HTMLInputElement>('.sam-club-check:checked') ?? [];

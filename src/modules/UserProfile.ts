@@ -6,6 +6,7 @@
 // userId generated once, hidden from UI, used for friend invite link.
 
 import { saveProfileToDB, loadProfileFromDB, type ProfileRecord } from './db.js';
+import { CS } from './cloudSync.js';
 
 // ── Keys ──────────────────────────────────────────────────────────────────────
 
@@ -54,7 +55,7 @@ export function saveProfileToLocal(data: Partial<ProfileData>): void {
     else                localStorage.removeItem(LS_AVATAR);
   }
   // Async backup to IndexedDB
-  void saveProfileToDB(loadProfileFromLocal());
+  void CS.saveProfile(loadProfileFromLocal());
 }
 
 export function loadProfileFromLocal(): ProfileRecord {

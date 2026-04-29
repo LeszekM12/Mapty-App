@@ -4,7 +4,7 @@
 // 100% local — no backend, no fetch.
 // Stores: localStorage (primary) + IndexedDB via db.ts (backup).
 // userId generated once, hidden from UI, used for friend invite link.
-import { saveProfileToDB } from './db.js';
+import { CS } from './cloudSync.js';
 // ── Keys ──────────────────────────────────────────────────────────────────────
 const LS_USER_ID = 'mapyou_userId_profile';
 const LS_USERNAME = 'mapyou_userName';
@@ -42,7 +42,7 @@ export function saveProfileToLocal(data) {
             localStorage.removeItem(LS_AVATAR);
     }
     // Async backup to IndexedDB
-    void saveProfileToDB(loadProfileFromLocal());
+    void CS.saveProfile(loadProfileFromLocal());
 }
 export function loadProfileFromLocal() {
     return {

@@ -4,6 +4,7 @@
 import type { ActivityRecord, SportType } from './Tracker.js';
 import { formatDuration, formatPace, formatDistance, SPORT_ICONS, SPORT_COLORS } from './Tracker.js';
 import { loadActivities, deleteActivity } from './db.js';
+import { CS } from './cloudSync.js';
 import { sendActivityFinishedPush } from './PushNotifications.js';
 
 // ── Splash "Dobra robota!" ────────────────────────────────────────────────────
@@ -583,7 +584,7 @@ export class ActivityHistoryPanel {
       item.querySelector('.act-history__del')?.addEventListener('click', async e => {
         e.stopPropagation();
         if (!confirm('Delete this activity?')) return;
-        await deleteActivity(act.id);
+        await CS.deleteActivity(act.id);
         item.style.opacity   = '0';
         item.style.transform = 'translateX(-110%)';
         setTimeout(() => item.remove(), 300);
