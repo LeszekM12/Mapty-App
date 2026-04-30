@@ -28,8 +28,10 @@ function isOnline() {
     return navigator.onLine;
 }
 async function apiPost(path, body) {
-    if (!isOnline())
+    if (!isOnline()) {
+        console.warn('[CS] offline, skipping POST', path);
         return false;
+    }
     try {
         const res = await fetch(`${BACKEND_URL}${path}`, {
             method: 'POST',
@@ -37,9 +39,14 @@ async function apiPost(path, body) {
             body: JSON.stringify(body),
             signal: AbortSignal.timeout(10000),
         });
+        if (!res.ok)
+            console.error('[CS] POST failed', path, res.status, await res.text().catch(() => ''));
+        else
+            console.log('[CS] POST ok', path, res.status);
         return res.ok;
     }
-    catch {
+    catch (err) {
+        console.error('[CS] POST error', path, err);
         return false;
     }
 }
@@ -156,7 +163,7 @@ export async function hydrate() {
 }
 // ── CS — główny obiekt syncu ──────────────────────────────────────────────────
 export const CS = {
-    // ── Workouts ────────────────────────────────────────────────────────────────
+    // ── Workouty ────────────────────────────────────────────────────────────────
     async saveWorkout(workout) {
         const id = await saveWorkoutToDB(workout);
         const userId = getUserId();

@@ -56,7 +56,7 @@ function isOnline(): boolean {
 }
 
 async function apiPost(path: string, body: unknown): Promise<boolean> {
-  if (!isOnline()) return false;
+  if (!isOnline()) { console.warn('[CS] offline, skipping POST', path); return false; }
   try {
     const res = await fetch(`${BACKEND_URL}${path}`, {
       method:  'POST',
@@ -64,8 +64,11 @@ async function apiPost(path: string, body: unknown): Promise<boolean> {
       body:    JSON.stringify(body),
       signal:  AbortSignal.timeout(10_000),
     });
+    if (!res.ok) console.error('[CS] POST failed', path, res.status, await res.text().catch(() => ''));
+    else console.log('[CS] POST ok', path, res.status);
     return res.ok;
-  } catch {
+  } catch (err) {
+    console.error('[CS] POST error', path, err);
     return false;
   }
 }
@@ -205,7 +208,7 @@ export async function hydrate(): Promise<void> {
 
 export const CS = {
 
-  // ── Workouts ────────────────────────────────────────────────────────────────
+  // ── Workouty ────────────────────────────────────────────────────────────────
 
   async saveWorkout(workout: Record<string, unknown>): Promise<string> {
     const id = await saveWorkoutToDB(workout);
