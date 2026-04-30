@@ -47,7 +47,7 @@ import {
   type ProfileRecord,
 } from './db.js';
 import type { ActivityRecord } from './Tracker.js';
-import { getUserId } from './PushNotifications.js';
+import { getUserId } from './UserProfile.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -180,29 +180,38 @@ export async function hydrate(): Promise<void> {
     // Zapisz do IndexedDB (put = upsert, nie duplikuje)
     if (serverWorkouts?.length) {
       for (const w of serverWorkouts) {
-        const mapped = { ...w, id: (w as unknown as Record<string, unknown>).workoutId as string ?? (w as unknown as Record<string, unknown>).id as string };
-        if (!mapped.id) continue;
-        await saveWorkoutToDB(mapped as unknown as Record<string, unknown>);
+        try {
+          const raw = w as unknown as Record<string, unknown>;
+          const id = (raw.workoutId ?? raw.id) as string | undefined;
+          if (!id) continue;
+          await saveWorkoutToDB({ ...raw, id });
+          count++;
+        } catch { /* skip problematic record */ }
       }
-      count += serverWorkouts.length;
     }
 
     if (serverActivities?.length) {
       for (const a of serverActivities) {
-        const mapped = { ...a, id: (a as unknown as Record<string, unknown>).activityId as string ?? a.id };
-        if (!mapped.id) continue; // skip if no id
-        await saveActivity(mapped as typeof a);
+        try {
+          const raw = a as unknown as Record<string, unknown>;
+          const id = (raw.activityId ?? raw.id) as string | undefined;
+          if (!id) continue;
+          await saveActivity({ ...a, id } as typeof a);
+          count++;
+        } catch { /* skip problematic record */ }
       }
-      count += serverActivities.length;
     }
 
     if (serverEnriched?.length) {
       for (const e of serverEnriched) {
-        // Mapuj activityId → id jeśli potrzeba
-        const mapped = { ...e, id: (e as unknown as Record<string, unknown>).activityId as string ?? e.id };
-        await saveEnrichedActivity(mapped as EnrichedActivity);
+        try {
+          const raw = e as unknown as Record<string, unknown>;
+          const id = (raw.activityId ?? raw.id) as string | undefined;
+          if (!id) continue;
+          await saveEnrichedActivity({ ...e, id } as EnrichedActivity);
+          count++;
+        } catch { /* skip */ }
       }
-      count += serverEnriched.length;
     }
 
     if (serverUnified?.length) {
@@ -215,10 +224,14 @@ export async function hydrate(): Promise<void> {
 
     if (serverPosts?.length) {
       for (const p of serverPosts) {
-        const mapped = { ...p, id: (p as unknown as Record<string, unknown>).postId as string ?? p.id } as PostRecord;
-        await savePost(mapped);
+        try {
+          const raw = p as unknown as Record<string, unknown>;
+          const id = (raw.postId ?? raw.id) as string | undefined;
+          if (!id) continue;
+          await savePost({ ...p, id } as PostRecord);
+          count++;
+        } catch { /* skip */ }
       }
-      count += serverPosts.length;
     }
 
     if (serverProfile) {

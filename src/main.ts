@@ -46,6 +46,22 @@ import { initUserProfile } from './modules/UserProfile.js';
 import { syncToMongoIfNeeded } from './modules/syncToMongo.js';
 import { CS } from './modules/cloudSync.js';
 
+// ─── Synchronizacja userId — jeden klucz dla całej apki ──────────────────────
+// mapty_userId (PushNotifications) i mapyou_userId_profile (UserProfile)
+// muszą być takie same — używamy mapyou_userId_profile jako źródła prawdy
+(function syncUserIds() {
+  const profileId = localStorage.getItem('mapyou_userId_profile');
+  const pushId    = localStorage.getItem('mapty_userId');
+  if (profileId && pushId && profileId !== pushId) {
+    // Nadpisz push userId profileId
+    localStorage.setItem('mapty_userId', profileId);
+  } else if (profileId && !pushId) {
+    localStorage.setItem('mapty_userId', profileId);
+  } else if (pushId && !profileId) {
+    localStorage.setItem('mapyou_userId_profile', pushId);
+  }
+})();
+
 // ─── Leaflet plugin types ─────────────────────────────────────────────────────
 
 interface MarkerClusterGroup extends L.FeatureGroup {

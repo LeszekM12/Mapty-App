@@ -22,7 +22,7 @@
 //   await CS.hydrate();                      // przy starcie — pobierz z Atlas jeśli IndexedDB puste
 import { BACKEND_URL } from '../config.js';
 import { saveWorkoutToDB, deleteWorkoutFromDB, loadWorkoutsFromDB, saveActivity, loadActivities, deleteActivity, saveEnrichedActivity, loadEnrichedActivities, deleteEnrichedActivity, saveUnifiedWorkout, loadUnifiedWorkouts, deleteUnifiedWorkout, savePost, loadPosts, deletePost, saveProfileToDB, } from './db.js';
-import { getUserId } from './PushNotifications.js';
+import { getUserId } from './UserProfile.js';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function isOnline() {
     return navigator.onLine;
@@ -139,29 +139,42 @@ export async function hydrate() {
         // Zapisz do IndexedDB (put = upsert, nie duplikuje)
         if (serverWorkouts?.length) {
             for (const w of serverWorkouts) {
-                const mapped = { ...w, id: w.workoutId ?? w.id };
-                if (!mapped.id)
-                    continue;
-                await saveWorkoutToDB(mapped);
+                try {
+                    const raw = w;
+                    const id = (raw.workoutId ?? raw.id);
+                    if (!id)
+                        continue;
+                    await saveWorkoutToDB({ ...raw, id });
+                    count++;
+                }
+                catch { /* skip problematic record */ }
             }
-            count += serverWorkouts.length;
         }
         if (serverActivities?.length) {
             for (const a of serverActivities) {
-                const mapped = { ...a, id: a.activityId ?? a.id };
-                if (!mapped.id)
-                    continue; // skip if no id
-                await saveActivity(mapped);
+                try {
+                    const raw = a;
+                    const id = (raw.activityId ?? raw.id);
+                    if (!id)
+                        continue;
+                    await saveActivity({ ...a, id });
+                    count++;
+                }
+                catch { /* skip problematic record */ }
             }
-            count += serverActivities.length;
         }
         if (serverEnriched?.length) {
             for (const e of serverEnriched) {
-                // Mapuj activityId → id jeśli potrzeba
-                const mapped = { ...e, id: e.activityId ?? e.id };
-                await saveEnrichedActivity(mapped);
+                try {
+                    const raw = e;
+                    const id = (raw.activityId ?? raw.id);
+                    if (!id)
+                        continue;
+                    await saveEnrichedActivity({ ...e, id });
+                    count++;
+                }
+                catch { /* skip */ }
             }
-            count += serverEnriched.length;
         }
         if (serverUnified?.length) {
             for (const u of serverUnified) {
@@ -172,10 +185,16 @@ export async function hydrate() {
         }
         if (serverPosts?.length) {
             for (const p of serverPosts) {
-                const mapped = { ...p, id: p.postId ?? p.id };
-                await savePost(mapped);
+                try {
+                    const raw = p;
+                    const id = (raw.postId ?? raw.id);
+                    if (!id)
+                        continue;
+                    await savePost({ ...p, id });
+                    count++;
+                }
+                catch { /* skip */ }
             }
-            count += serverPosts.length;
         }
         if (serverProfile) {
             await saveProfileToDB(serverProfile);

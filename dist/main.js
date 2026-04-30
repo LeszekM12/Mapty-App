@@ -36,6 +36,23 @@ import { showNameModalIfNeeded, openChangeNameModal, ensureRecoveryCode, showRec
 import { initUserProfile } from './modules/UserProfile.js';
 import { syncToMongoIfNeeded } from './modules/syncToMongo.js';
 import { CS } from './modules/cloudSync.js';
+// ─── Synchronizacja userId — jeden klucz dla całej apki ──────────────────────
+// mapty_userId (PushNotifications) i mapyou_userId_profile (UserProfile)
+// muszą być takie same — używamy mapyou_userId_profile jako źródła prawdy
+(function syncUserIds() {
+    const profileId = localStorage.getItem('mapyou_userId_profile');
+    const pushId = localStorage.getItem('mapty_userId');
+    if (profileId && pushId && profileId !== pushId) {
+        // Nadpisz push userId profileId
+        localStorage.setItem('mapty_userId', profileId);
+    }
+    else if (profileId && !pushId) {
+        localStorage.setItem('mapty_userId', profileId);
+    }
+    else if (pushId && !profileId) {
+        localStorage.setItem('mapyou_userId_profile', pushId);
+    }
+})();
 // ─── DOM refs (module-level, identical to script.js) ─────────────────────────
 const form = document.querySelector('.form');
 const containerWorkouts = document.querySelector('.workouts');
