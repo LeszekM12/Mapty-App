@@ -180,14 +180,18 @@ export async function hydrate(): Promise<void> {
     // Zapisz do IndexedDB (put = upsert, nie duplikuje)
     if (serverWorkouts?.length) {
       for (const w of serverWorkouts) {
-        await saveWorkoutToDB(w as unknown as Record<string, unknown>);
+        const mapped = { ...w, id: (w as unknown as Record<string, unknown>).workoutId as string ?? (w as unknown as Record<string, unknown>).id as string };
+        if (!mapped.id) continue;
+        await saveWorkoutToDB(mapped as unknown as Record<string, unknown>);
       }
       count += serverWorkouts.length;
     }
 
     if (serverActivities?.length) {
       for (const a of serverActivities) {
-        await saveActivity(a);
+        const mapped = { ...a, id: (a as unknown as Record<string, unknown>).activityId as string ?? a.id };
+        if (!mapped.id) continue; // skip if no id
+        await saveActivity(mapped as typeof a);
       }
       count += serverActivities.length;
     }

@@ -139,13 +139,19 @@ export async function hydrate() {
         // Zapisz do IndexedDB (put = upsert, nie duplikuje)
         if (serverWorkouts?.length) {
             for (const w of serverWorkouts) {
-                await saveWorkoutToDB(w);
+                const mapped = { ...w, id: w.workoutId ?? w.id };
+                if (!mapped.id)
+                    continue;
+                await saveWorkoutToDB(mapped);
             }
             count += serverWorkouts.length;
         }
         if (serverActivities?.length) {
             for (const a of serverActivities) {
-                await saveActivity(a);
+                const mapped = { ...a, id: a.activityId ?? a.id };
+                if (!mapped.id)
+                    continue; // skip if no id
+                await saveActivity(mapped);
             }
             count += serverActivities.length;
         }
