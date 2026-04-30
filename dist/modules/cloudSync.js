@@ -156,7 +156,7 @@ export async function hydrate() {
 }
 // ── CS — główny obiekt syncu ──────────────────────────────────────────────────
 export const CS = {
-    // ── Workouty ────────────────────────────────────────────────────────────────
+    // ── Workouts ────────────────────────────────────────────────────────────────
     async saveWorkout(workout) {
         const id = await saveWorkoutToDB(workout);
         const userId = getUserId();

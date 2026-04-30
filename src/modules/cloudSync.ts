@@ -205,7 +205,7 @@ export async function hydrate(): Promise<void> {
 
 export const CS = {
 
-  // ── Workouty ────────────────────────────────────────────────────────────────
+  // ── Workouts ────────────────────────────────────────────────────────────────
 
   async saveWorkout(workout: Record<string, unknown>): Promise<string> {
     const id = await saveWorkoutToDB(workout);
