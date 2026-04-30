@@ -21,6 +21,7 @@ declare const Dexie: any;
 export interface Friend {
   id?:            number;           // auto-increment
   name:           string;
+  friendUserId:   string | null;    // userId znajomego w Atlas (do pobierania feedu)
   subscriptionId: string;           // endpoint URL (unikalny klucz)
   pushSub:        {                 // pełna subskrypcja push do wysyłania notyfikacji
     endpoint:       string;
@@ -33,7 +34,8 @@ export interface Friend {
 }
 
 export interface InvitePayload {
-  name:   string;
+  name:         string;
+  friendUserId: string | null;
   pushSub: {
     endpoint:       string;
     expirationTime: number | null;
@@ -53,6 +55,17 @@ friendsDb.version(1).stores({
 /** Pobierz wszystkich znajomych (posortowanych po imieniu) */
 export async function getAllFriends(): Promise<Friend[]> {
   return await friendsDb.friends.orderBy('name').toArray();
+}
+
+/** Zaktualizuj friendUserId znajomego */
+export async function updateFriendUserId(
+  subscriptionId: string,
+  friendUserId: string,
+): Promise<void> {
+  await friendsDb.friends
+    .where('subscriptionId')
+    .equals(subscriptionId)
+    .modify({ friendUserId });
 }
 
 /** Dodaj znajomego (ignoruj jeśli już istnieje ten sam subscriptionId) */
@@ -99,14 +112,15 @@ export async function updateFriendLastSeen(subscriptionId: string): Promise<void
  * Format: https://domain/#invite=ABC12345 (8 znaków zamiast 500)
  */
 export async function generateInviteLink(
-  name:    string,
-  pushSub: Friend['pushSub'],
+  name:       string,
+  pushSub:    Friend['pushSub'],
   backendUrl: string,
+  userId?:    string,
 ): Promise<string> {
   const res  = await fetch(`${backendUrl}/live/invite`, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ name, pushSub }),
+    body:    JSON.stringify({ name, pushSub, userId }),
   });
   const data = await res.json() as { status: string; code: string };
   if (data.status !== 'ok') throw new Error('Failed to create invite');
@@ -124,8 +138,8 @@ export async function fetchInviteByCode(
   try {
     const res  = await fetch(`${backendUrl}/live/invite/${code}`);
     if (!res.ok) return null;
-    const data = await res.json() as { status: string; name: string; pushSub: Friend['pushSub'] };
-    return { name: data.name, pushSub: data.pushSub };
+    const data = await res.json() as { status: string; name: string; pushSub: Friend['pushSub']; friendUserId?: string };
+    return { name: data.name, pushSub: data.pushSub, friendUserId: data.friendUserId ?? null };
   } catch {
     return null;
   }

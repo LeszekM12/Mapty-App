@@ -22,6 +22,13 @@ friendsDb.version(1).stores({
 export async function getAllFriends() {
     return await friendsDb.friends.orderBy('name').toArray();
 }
+/** Zaktualizuj friendUserId znajomego */
+export async function updateFriendUserId(subscriptionId, friendUserId) {
+    await friendsDb.friends
+        .where('subscriptionId')
+        .equals(subscriptionId)
+        .modify({ friendUserId });
+}
 /** Dodaj znajomego (ignoruj jeśli już istnieje ten sam subscriptionId) */
 export async function addFriend(friend) {
     const existing = await friendsDb.friends
@@ -57,11 +64,11 @@ export async function updateFriendLastSeen(subscriptionId) {
  * Generuje krótki link zaproszenia przez backend.
  * Format: https://domain/#invite=ABC12345 (8 znaków zamiast 500)
  */
-export async function generateInviteLink(name, pushSub, backendUrl) {
+export async function generateInviteLink(name, pushSub, backendUrl, userId) {
     const res = await fetch(`${backendUrl}/live/invite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, pushSub }),
+        body: JSON.stringify({ name, pushSub, userId }),
     });
     const data = await res.json();
     if (data.status !== 'ok')
@@ -78,7 +85,7 @@ export async function fetchInviteByCode(code, backendUrl) {
         if (!res.ok)
             return null;
         const data = await res.json();
-        return { name: data.name, pushSub: data.pushSub };
+        return { name: data.name, pushSub: data.pushSub, friendUserId: data.friendUserId ?? null };
     }
     catch {
         return null;

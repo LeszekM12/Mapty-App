@@ -2576,50 +2576,168 @@ body {
 }
 
 
-/* ── Recovery code ────────────────────────────────────────────────────────── */
+/* ── Friends Feed ─────────────────────────────────────────────────────────── */
 
-.recovery-code__display {
-  background:    rgba(255,255,255,0.06);
-  border:        1px solid rgba(255,255,255,0.12);
-  border-radius: 12px;
-  padding:       20px;
-  margin:        16px 0;
-  text-align:    center;
+#friendsFeed {
+  padding: 0 12px 80px;
 }
 
-.recovery-code__digits {
-  font-size:     36px;
-  font-weight:   700;
-  letter-spacing:8px;
-  color:         #4ade80;
-  font-family:   monospace;
-}
-
-.name-modal__btn--secondary {
-  background:   rgba(255,255,255,0.08);
-  color:        #fff;
-  margin-bottom:8px;
-}
-
-.name-modal__recover-link {
-  background:  none;
-  border:      none;
-  color:       rgba(255,255,255,0.45);
-  font-size:   13px;
-  cursor:      pointer;
-  padding:     8px;
-  width:       100%;
+.friends-feed__loading,
+.friends-feed__empty {
   text-align:  center;
-  margin-top:  4px;
+  color:       rgba(255,255,255,0.4);
+  font-size:   14px;
+  padding:     32px 0;
 }
 
-.name-modal__recover-link:hover {
+.ff-card {
+  background:    rgba(255,255,255,0.04);
+  border:        1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding:       16px;
+  margin-bottom: 12px;
+}
+
+.ff-card__header {
+  display:        flex;
+  align-items:    center;
+  gap:            10px;
+  margin-bottom:  10px;
+}
+
+.ff-card__avatar {
+  width:           36px;
+  height:          36px;
+  border-radius:   50%;
+  background:      rgba(255,255,255,0.1);
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  font-weight:     700;
+  font-size:       16px;
+  flex-shrink:     0;
+}
+
+.ff-card__meta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ff-card__author {
+  font-weight: 600;
+  font-size:   14px;
+}
+
+.ff-card__date {
+  font-size: 12px;
+  color:     rgba(255,255,255,0.4);
+}
+
+.ff-card__type {
+  font-size: 18px;
+}
+
+.ff-card__title {
+  font-weight:   600;
+  font-size:     15px;
+  margin-bottom: 6px;
+}
+
+.ff-card__body {
+  font-size:     13px;
+  color:         rgba(255,255,255,0.7);
+  margin-bottom: 10px;
+  line-height:   1.5;
+}
+
+.ff-card__photo {
+  width:         100%;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  object-fit:    cover;
+  max-height:    280px;
+}
+
+.ff-card__stats {
+  display:       flex;
+  gap:           16px;
+  font-size:     13px;
+  color:         rgba(255,255,255,0.6);
+  margin-bottom: 10px;
+}
+
+.ff-card__actions {
+  display:    flex;
+  gap:        12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.ff-card__like,
+.ff-card__comment-btn {
+  background:    none;
+  border:        none;
+  color:         rgba(255,255,255,0.5);
+  font-size:     14px;
+  cursor:        pointer;
+  padding:       6px 10px;
+  border-radius: 8px;
+  display:       flex;
+  align-items:   center;
+  gap:           6px;
+}
+
+.ff-card__like--liked {
+  color: #f43f5e;
+}
+
+.ff-card__comments {
+  margin-top:    10px;
+  border-top:    1px solid rgba(255,255,255,0.06);
+  padding-top:   10px;
+}
+
+.ff-comment {
+  display:       flex;
+  gap:           8px;
+  font-size:     13px;
+  margin-bottom: 8px;
+}
+
+.ff-comment__author {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.ff-comment__text {
   color: rgba(255,255,255,0.7);
 }
 
-.name-modal__restore-status {
-  text-align:    center;
-  min-height:    20px;
-  margin-bottom: 8px;
+.ff-comment__input-row {
+  display: flex;
+  gap:     8px;
+  margin-top: 8px;
+}
+
+.ff-comment__input {
+  flex:          1;
+  background:    rgba(255,255,255,0.06);
+  border:        1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  padding:       8px 12px;
+  color:         #fff;
   font-size:     13px;
+}
+
+.ff-comment__send {
+  background:    #00c46a;
+  border:        none;
+  border-radius: 8px;
+  padding:       8px 14px;
+  color:         #fff;
+  font-size:     13px;
+  cursor:        pointer;
+  font-weight:   600;
 }

@@ -10,6 +10,8 @@ import { getAllFriends, addFriend, deleteFriend, updateFriendLiveToken, generate
 import { LiveMap } from './LiveMap.js';
 import { BACKEND_URL } from '../config.js';
 import { getUserName } from './LiveTracker.js';
+import { getUserId } from './UserProfile.js';
+import { loadProfileFromLocal } from './UserProfile.js';
 // ── Stałe ─────────────────────────────────────────────────────────────────────
 const STATUS_POLL_MS = 10000; // sprawdzaj status znajomych co 10s
 // ── FriendsView class ─────────────────────────────────────────────────────────
@@ -135,26 +137,198 @@ export class FriendsView {
           <span class="friends-empty__icon">👥</span>
           <p>No friends yet.<br>Share your invite link to get started!</p>
         </div>`;
-            return;
         }
-        list.innerHTML = friends.map(f => this._buildFriendCard(f)).join('');
-        // Podpnij przyciski
-        list.querySelectorAll('[data-watch]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const token = btn.dataset.watch;
-                const name = btn.dataset.name;
-                this._openLiveView(token, name);
+        else {
+            list.innerHTML = friends.map(f => this._buildFriendCard(f)).join('');
+            list.querySelectorAll('[data-watch]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const token = btn.dataset.watch;
+                    const name = btn.dataset.name;
+                    this._openLiveView(token, name);
+                });
             });
+            list.querySelectorAll('[data-delete]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const id = Number(btn.dataset.delete);
+                    if (confirm('Remove this friend?')) {
+                        await deleteFriend(id);
+                        void this.render();
+                    }
+                });
+            });
+        }
+        // Renderuj feed znajomych
+        void this._renderFeed();
+    }
+    // ── Friends Feed ─────────────────────────────────────────────────────────────
+    async _renderFeed() {
+        const feedEl = document.getElementById('friendsFeed');
+        if (!feedEl)
+            return;
+        const userId = getUserId();
+        if (!userId)
+            return;
+        feedEl.innerHTML = '<div class="friends-feed__loading">Loading feed…</div>';
+        try {
+            const res = await fetch(`${BACKEND_URL}/feed?userId=${encodeURIComponent(userId)}`);
+            if (!res.ok) {
+                feedEl.innerHTML = '';
+                return;
+            }
+            const data = await res.json();
+            if (!data.data.length) {
+                feedEl.innerHTML = '<div class="friends-feed__empty">No activity from friends yet 🏃</div>';
+                return;
+            }
+            feedEl.innerHTML = '';
+            for (const item of data.data) {
+                const card = await this._buildFeedCard(item.kind, item.data);
+                feedEl.appendChild(card);
+            }
+        }
+        catch {
+            feedEl.innerHTML = '';
+        }
+    }
+    async _buildFeedCard(kind, data) {
+        const card = document.createElement('div');
+        card.className = 'ff-card';
+        const itemId = (data.activityId ?? data.postId ?? data.id);
+        const itemType = kind === 'activity' ? 'activity' : 'post';
+        const userId = getUserId();
+        const profile = loadProfileFromLocal();
+        // Fetch likes
+        let likeCount = 0;
+        let liked = false;
+        try {
+            const lr = await fetch(`${BACKEND_URL}/feed/likes/${encodeURIComponent(itemId)}?userId=${encodeURIComponent(userId)}`);
+            if (lr.ok) {
+                const ld = await lr.json();
+                likeCount = ld.count;
+                liked = ld.liked;
+            }
+        }
+        catch { }
+        // Fetch comments
+        let comments = [];
+        try {
+            const cr = await fetch(`${BACKEND_URL}/feed/comments/${encodeURIComponent(itemId)}`);
+            if (cr.ok) {
+                const cd = await cr.json();
+                comments = cd.data;
+            }
+        }
+        catch { }
+        const date = new Date(data.date);
+        const dateStr = date.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+        const photoHtml = data.photoUrl
+            ? `<img class="ff-card__photo" src="${data.photoUrl}" alt="" loading="lazy"/>`
+            : '';
+        const authorName = (data.authorName ?? data.name ?? 'Friend');
+        const title = (data.title ?? data.description ?? data.name ?? '');
+        const body = (data.body ?? '');
+        // Stats for activity
+        const statsHtml = kind === 'activity' ? `
+      <div class="ff-card__stats">
+        <span>${(+(data.distanceKm ?? 0)).toFixed(2)} km</span>
+        <span>${Math.floor((+(data.durationSec ?? 0)) / 60)} min</span>
+        <span>${(data.sport ?? '')}</span>
+      </div>` : '';
+        card.innerHTML = `
+      <div class="ff-card__header">
+        <div class="ff-card__avatar">${authorName.charAt(0).toUpperCase()}</div>
+        <div class="ff-card__meta">
+          <span class="ff-card__author">${authorName}</span>
+          <span class="ff-card__date">${dateStr}</span>
+        </div>
+        <span class="ff-card__type">${kind === 'activity' ? '🏃' : '📝'}</span>
+      </div>
+      ${title ? `<div class="ff-card__title">${title}</div>` : ''}
+      ${body ? `<div class="ff-card__body">${body}</div>` : ''}
+      ${photoHtml}
+      ${statsHtml}
+      <div class="ff-card__actions">
+        <button class="ff-card__like ${liked ? 'ff-card__like--liked' : ''}" data-item="${itemId}" data-type="${itemType}">
+          ❤️ <span class="ff-like-count">${likeCount}</span>
+        </button>
+        <button class="ff-card__comment-btn" data-item="${itemId}">
+          💬 <span class="ff-comment-count">${comments.length}</span>
+        </button>
+      </div>
+      <div class="ff-card__comments" id="ffc-${itemId}" style="display:none">
+        <div class="ff-comments__list">
+          ${comments.map(c => `
+            <div class="ff-comment">
+              <span class="ff-comment__author">${c.authorName}</span>
+              <span class="ff-comment__text">${c.text}</span>
+            </div>`).join('')}
+        </div>
+        <div class="ff-comment__input-row">
+          <input class="ff-comment__input" placeholder="Add a comment…" maxlength="200" data-item="${itemId}" data-type="${itemType}"/>
+          <button class="ff-comment__send" data-item="${itemId}" data-type="${itemType}">Send</button>
+        </div>
+      </div>`;
+        // Like handler
+        card.querySelector('.ff-card__like')?.addEventListener('click', async (e) => {
+            const btn = e.currentTarget;
+            const res = await fetch(`${BACKEND_URL}/feed/like`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, itemId, itemType }),
+            });
+            if (res.ok) {
+                const d = await res.json();
+                btn.classList.toggle('ff-card__like--liked', d.liked);
+                const countEl = btn.querySelector('.ff-like-count');
+                if (countEl)
+                    countEl.textContent = String(d.count);
+            }
         });
-        list.querySelectorAll('[data-delete]').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const id = Number(btn.dataset.delete);
-                if (confirm('Remove this friend?')) {
-                    await deleteFriend(id);
-                    void this.render();
+        // Comment toggle
+        card.querySelector('.ff-card__comment-btn')?.addEventListener('click', () => {
+            const panel = card.querySelector(`#ffc-${itemId}`);
+            if (panel)
+                panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        });
+        // Send comment
+        card.querySelector('.ff-comment__send')?.addEventListener('click', async () => {
+            const input = card.querySelector('.ff-comment__input');
+            const text = input?.value.trim();
+            if (!text)
+                return;
+            const res = await fetch(`${BACKEND_URL}/feed/comment`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId,
+                    authorName: profile.name,
+                    itemId,
+                    itemType,
+                    text,
+                }),
+            });
+            if (res.ok) {
+                const d = await res.json();
+                const list = card.querySelector('.ff-comments__list');
+                if (list) {
+                    const div = document.createElement('div');
+                    div.className = 'ff-comment';
+                    div.innerHTML = `<span class="ff-comment__author">${d.data.authorName}</span><span class="ff-comment__text">${d.data.text}</span>`;
+                    list.appendChild(div);
                 }
-            });
+                input.value = '';
+                const countEl = card.querySelector('.ff-comment-count');
+                if (countEl)
+                    countEl.textContent = String(parseInt(countEl.textContent ?? '0') + 1);
+            }
         });
+        // Enter to send
+        card.querySelector('.ff-comment__input')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                card.querySelector('.ff-comment__send')?.click();
+            }
+        });
+        return card;
     }
     _buildFriendCard(f) {
         const isLive = !!f.liveToken;
@@ -207,7 +381,7 @@ export class FriendsView {
             try {
                 const subJson = sub.toJSON();
                 const short = await Promise.race([
-                    generateInviteLink(name, subJson, BACKEND_URL),
+                    generateInviteLink(name, subJson, BACKEND_URL, getUserId()),
                     new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 3000)),
                 ]);
                 this._cachedInviteLink = short;
@@ -300,6 +474,7 @@ export class FriendsView {
         modal.querySelector('#afAdd')?.addEventListener('click', async () => {
             let name = prefillName;
             let sub = prefillSub;
+            let invFriendId = null;
             if (!prefillSub) {
                 const input = modal.querySelector('#afLinkInput');
                 const raw = input?.value.trim() ?? '';
@@ -317,6 +492,7 @@ export class FriendsView {
                     if (inv) {
                         name = inv.name;
                         sub = inv.pushSub;
+                        invFriendId = inv.friendUserId ?? null;
                     }
                     else {
                         alert('Invalid or expired invite link');
@@ -340,6 +516,7 @@ export class FriendsView {
             const endpoint = sub?.endpoint ?? `local:${name}:${Date.now()}`;
             await addFriend({
                 name,
+                friendUserId: invFriendId,
                 subscriptionId: endpoint,
                 pushSub: sub ?? { endpoint, expirationTime: null, keys: { p256dh: '', auth: '' } },
                 liveToken: null,
