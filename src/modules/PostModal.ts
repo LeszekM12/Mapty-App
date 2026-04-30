@@ -5,6 +5,7 @@
 // Stored locally in IndexedDB (postsFeed table) + localStorage fallback.
 
 import { savePost, type PostRecord } from './db.js';
+import { CS } from './cloudSync.js';
 import { getJoinedClubs, addToClubFeed } from './SearchView.js';
 
 // ── Build HTML ────────────────────────────────────────────────────────────────
@@ -210,7 +211,7 @@ export class PostModal {
       avatarB64:  localStorage.getItem('mapyou_avatar') ?? null,
     };
 
-    await savePost(post);
+    await CS.savePost(post);
     // Share to selected clubs
     const checkedClubs = el.querySelectorAll<HTMLInputElement>('.pm-club-check:checked');
     const userName = localStorage.getItem('mapyou_userName') ?? 'Athlete';
