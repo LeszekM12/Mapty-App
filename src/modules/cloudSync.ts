@@ -100,6 +100,31 @@ async function apiGet<T>(path: string): Promise<T[] | null> {
   }
 }
 
+
+// ── Upload zdjęcia do Cloudinary jeśli base64 ─────────────────────────────────
+
+async function uploadIfBase64(
+  base64:    string | null | undefined,
+  userId:    string,
+  folder:    'activities' | 'posts' | 'avatars',
+  publicId?: string,
+): Promise<string | null | undefined> {
+  if (!base64 || !base64.startsWith('data:image/')) return base64 ?? null;
+  try {
+    const res = await fetch(`${BACKEND_URL}/upload/image`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ image: base64, userId, folder, publicId }),
+      signal:  AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { status: string; url: string };
+    return data.status === 'ok' ? data.url : null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Hydratacja — pobierz dane z Atlas do IndexedDB przy starcie ───────────────
 
 const LS_HYDRATED_KEY = 'mapyou_hydrated_at';
@@ -251,10 +276,13 @@ export const CS = {
   async saveEnrichedActivity(activity: EnrichedActivity): Promise<string> {
     const id = await saveEnrichedActivity(activity);
     const userId = getUserId();
+    // Upload zdjęcia do Cloudinary przed zapisem do Atlas
+    const photoUrl = await uploadIfBase64(activity.photoUrl, userId, 'activities');
     void apiPost('/enriched-activities', {
       ...activity,
       activityId: activity.id,
       userId,
+      photoUrl: photoUrl ?? activity.photoUrl,
     });
     return id;
   },
@@ -288,10 +316,16 @@ export const CS = {
   async savePost(post: PostRecord): Promise<void> {
     await savePost(post);
     const userId = getUserId();
+    // Upload zdjęcia do Cloudinary przed zapisem do Atlas
+    const photoUrl = await uploadIfBase64(post.photoUrl, userId, 'posts');
+    const avatarUrl = await uploadIfBase64(post.avatarB64, userId, 'avatars',
+      `mapyou/avatars/${userId}/avatar`);
     void apiPost('/posts', {
       ...post,
-      postId: post.id,
+      postId:   post.id,
       userId,
+      photoUrl: photoUrl ?? post.photoUrl,
+      avatarB64: avatarUrl ?? post.avatarB64,
     });
   },
 
@@ -306,7 +340,14 @@ export const CS = {
   async saveProfile(profile: ProfileRecord): Promise<void> {
     await saveProfileToDB(profile);
     const userId = getUserId();
-    void apiPost('/users', { ...profile, userId });
+    // Upload avatara do Cloudinary przed zapisem do Atlas
+    const avatarUrl = await uploadIfBase64(profile.avatarB64, userId, 'avatars',
+      `mapyou/avatars/${userId}/avatar`);
+    void apiPost('/users', {
+      ...profile,
+      userId,
+      avatarB64: avatarUrl ?? profile.avatarB64,
+    });
   },
 
   // ── Hydratacja przy starcie ───────────────────────────────────────────────────
