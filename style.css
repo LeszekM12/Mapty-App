@@ -2575,3 +2575,51 @@ body {
     justify-content: center !important;
 }
 
+
+/* ── Recovery code ────────────────────────────────────────────────────────── */
+
+.recovery-code__display {
+  background:    rgba(255,255,255,0.06);
+  border:        1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding:       20px;
+  margin:        16px 0;
+  text-align:    center;
+}
+
+.recovery-code__digits {
+  font-size:     36px;
+  font-weight:   700;
+  letter-spacing:8px;
+  color:         #4ade80;
+  font-family:   monospace;
+}
+
+.name-modal__btn--secondary {
+  background:   rgba(255,255,255,0.08);
+  color:        #fff;
+  margin-bottom:8px;
+}
+
+.name-modal__recover-link {
+  background:  none;
+  border:      none;
+  color:       rgba(255,255,255,0.45);
+  font-size:   13px;
+  cursor:      pointer;
+  padding:     8px;
+  width:       100%;
+  text-align:  center;
+  margin-top:  4px;
+}
+
+.name-modal__recover-link:hover {
+  color: rgba(255,255,255,0.7);
+}
+
+.name-modal__restore-status {
+  text-align:    center;
+  min-height:    20px;
+  margin-bottom: 8px;
+  font-size:     13px;
+}

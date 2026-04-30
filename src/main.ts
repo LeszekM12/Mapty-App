@@ -41,7 +41,7 @@ import { migrateToUnified, saveUnifiedWorkout } from './modules/UnifiedWorkout.j
 import { openSaveActivityModal } from './modules/SaveActivityModal.js';
 import { liveTracker }          from './modules/LiveTracker.js';
 import { FriendsView }          from './modules/FriendsView.js';
-import { showNameModalIfNeeded, openChangeNameModal } from './modules/UserName.js';
+import { showNameModalIfNeeded, openChangeNameModal, ensureRecoveryCode, showRecoveryCodeModal } from './modules/UserName.js';
 import { initUserProfile } from './modules/UserProfile.js';
 import { syncToMongoIfNeeded } from './modules/syncToMongo.js';
 import { CS } from './modules/cloudSync.js';
@@ -2197,6 +2197,12 @@ document.getElementById('btnChangeName')?.addEventListener('click', () => {
   openChangeNameModal();
 });
 
+// ─── Kod odzyskiwania (Settings) ─────────────────────────────────────────────
+document.getElementById('settingRecovery')?.addEventListener('click', () => {
+  const userId = localStorage.getItem('mapyou_userId_profile') ?? '';
+  if (userId) void showRecoveryCodeModal(userId);
+});
+
 // ─── Sync to cloud button (Settings) ─────────────────────────────────────────
 document.getElementById('settingSync')?.addEventListener('click', async () => {
   localStorage.removeItem('mapyou_mongo_synced');
@@ -2239,6 +2245,12 @@ document.getElementById('settingSync')?.addEventListener('click', async () => {
 
 // ─── Sync do MongoDB Atlas (jednorazowa migracja z IndexedDB) ───────────────
 void syncToMongoIfNeeded();
+
+// ─── Generuj kod odzyskiwania dyskretnie w tle ────────────────────────────────
+setTimeout(() => {
+  const userId = localStorage.getItem('mapyou_userId_profile');
+  if (userId) void ensureRecoveryCode(userId);
+}, 3000);
 
 // ─── Hydratacja — pobierz dane z Atlas do IndexedDB jeśli puste ──────────────
 void CS.hydrate();
